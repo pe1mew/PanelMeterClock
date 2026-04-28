@@ -12,7 +12,7 @@ int           activeFreq = 0;
 unsigned long lastPrint  = 0;
 
 void setup() {
-    Serial.begin(115200);
+    Serial0.begin(115200);
 
     analogReadResolution(12);                              // 12-bit ADC: 0-4095
     analogSetPinAttenuation(POT_FREQ_PIN, ADC_11db);      // full 0-3.3 V range
@@ -22,10 +22,10 @@ void setup() {
     ledcAttachPin(PWM_OUT_PIN, PWM_CHANNEL);
     ledcWrite(PWM_CHANNEL, 0);
 
-    Serial.println("PWMTest ready.");
-    Serial.println("GPIO1 = frequency pot | GPIO2 = duty cycle pot | GPIO15 = PWM out");
-    Serial.println("RC filter: R=1k, C=10uF, fc~16Hz");
-    Serial.println("-----------------------------------------------------------");
+    Serial0.println("PWMTest ready.");
+    Serial0.println("GPIO1 = frequency pot | GPIO2 = duty cycle pot | GPIO15 = PWM out");
+    Serial0.println("RC filter: R=1k, C=10uF, fc~16Hz");
+    Serial0.println("-----------------------------------------------------------");
 }
 
 void loop() {
@@ -47,7 +47,7 @@ void loop() {
         lastPrint = millis();
         float dutyPct    = dutyCycle / 255.0f * 100.0f;
         float voltageOut = dutyCycle / 255.0f * 3.3f;
-        Serial.printf(
+        Serial0.printf(
             "Freq: %5d Hz | Duty: %3d/255 (%5.1f%%) | V_out ~%.2f V | ADC_f=%4d ADC_d=%4d\n",
             activeFreq, dutyCycle, dutyPct, voltageOut, rawFreq, rawDuty
         );
