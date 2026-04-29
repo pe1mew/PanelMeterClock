@@ -2,7 +2,7 @@
 #include "pwm_driver.h"
 
 // Define to disable potentiometer control and use fixed frequency/duty.
-#define POT_CONTROL_DISABLED
+// #define POT_CONTROL_DISABLED
 
 const int   POT_FREQ_PIN        = 1;       // ADC1_CH0 - frequency control potentiometer
 const int   POT_DUTY_PIN        = 2;       // ADC1_CH1 - duty cycle control potentiometer
