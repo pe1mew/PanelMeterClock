@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pio run *)",
+      "PowerShell($pio = \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"; cd \"c:\\\\Users\\\\drasv\\\\github\\\\PanelMeterClock\\\\Research\\\\PWMTest\"; & $pio run -t clean 2>&1)",
+      "PowerShell($pio = \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"; cd \"c:\\\\Users\\\\drasv\\\\github\\\\PanelMeterClock\\\\Research\\\\PWMTest\"; & $pio run -t upload 2>&1)",
+      "PowerShell($pio = \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"; cd \"c:\\\\Users\\\\drasv\\\\github\\\\PanelMeterClock\\\\Research\\\\PWMTest\"; & $pio device monitor --port COM3 --baud 115200 2>&1 | Select-Object -First 20)",
+      "Read(//c/Users/drasv/AppData/Local/Temp/claude/c--Users-drasv-github-PanelMeterClock-Research-PWMTest/91931bbb-070e-4850-87fa-ae703f2556c7/tasks/**)",
+      "PowerShell(Get-PnpDevice -Class Ports -Status OK)",
+      "PowerShell($pio = \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"; & $pio device list 2>&1)",
+      "PowerShell($pio = \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"; cd \"c:\\\\Users\\\\drasv\\\\github\\\\PanelMeterClock\\\\Research\\\\PWMTest\"; & $pio run -t clean; & $pio run -t upload 2>&1)"
+    ]
+  }
+}
