@@ -228,6 +228,8 @@ MDNS.end();
 
 ### 5.6 GNSS Subsystem
 
+**Module:** Quectel L76-M33 (GPS/GLONASS/Galileo/BeiDou, 3.3 V, NMEA 0183, 1PPS — see PMC-HTD-001 §6).
+
 `gnss_task` is created only when `gnss_enabled` NVS flag is set (FR-GPS-001..002). It reads NMEA sentences from the GNSS UART, decodes `$GPRMC`/`$GNRMC`, and tracks fix validity. When a valid fix is obtained (FR-GPS-005), it writes the GNSS UTC time to `utc_epoch_s` and signals the tick source arbitrator to switch to hardware 1PPS.
 
 **Hardware assignments (resolved):**

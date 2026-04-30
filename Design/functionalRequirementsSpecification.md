@@ -114,7 +114,8 @@ Section 5 provides a system-level overview with priority hierarchies. Appendix B
 | ESP32-S3 Technical Reference Manual | `Documentation/esp32-s3_technical_reference_manual_en.pdf` |
 | WEMOS LOLIN S3 Schematic | `Documentation/sch_s3_v1.0.0.pdf` |
 | WEMOS LOLIN S3 Dimensions | `Documentation/dim_s3_v1.0.0.pdf` |
-| Siemens 1604P Panel Meter (DC 10.00 GF024T005) | Manufacturer datasheet (external) |
+| Siemens 1604P Panel Meter (DC 10.00 GF024T005) | `Documentation/` — Siemens product documentation |
+| Quectel L76-M33 GNSS Module | `Documentation/` — Quectel L76-M33 Hardware Design Guide and Product Specification |
 
 ### 4.2 Software and Protocol Standards
 

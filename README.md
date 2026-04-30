@@ -22,8 +22,8 @@ A wall clock that displays the current local time on three Siemens 1604P moving-
 | Panel meters | 3 × Siemens 1604P, 1 V FSD, modified to 3 V FSD by series resistor substitution |
 | PWM filter | RC low-pass filter per channel: R = 1 kΩ, C = 10 µF, f_c ≈ 16 Hz |
 | Series resistor | 2.0 kΩ ±1 % metal film per meter (measured: I_FSD = 1 mA, R_coil = 82.2 Ω) |
-| GNSS receiver | Optional; 3.3 V module with NMEA 0183 and 1PPS output (TBD) |
-| GNSS antenna | SMA female chassis connector (J1); external active or passive antenna |
+| GNSS receiver | Optional; Quectel L76-M33 (GPS/GLONASS/Galileo/BeiDou, 3.3 V, NMEA 0183, 1PPS, U.FL) |
+| GNSS antenna | SMA female chassis connector (J1) via U.FL-to-SMA pigtail; external active or passive antenna |
 | Power supply | 5 V via USB-C (LOLIN S3 on-board regulator) |
 
 ## Repository Structure

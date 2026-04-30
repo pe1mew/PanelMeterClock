@@ -227,19 +227,41 @@ Each meter uses a dedicated timer so that the PWM frequency of one channel can b
 
 ## 6. GNSS Hardware Interface
 
+### 6.0 Module — Quectel L76-M33
+
+| Parameter | Value |
+|-----------|-------|
+| Part number | Quectel L76-M33 |
+| Constellations | GPS (L1 C/A), GLONASS (L1OF), Galileo (E1B/C), BeiDou (B1I), QZSS (L1 C/A) |
+| Supply voltage (VCC) | 3.3 V (2.8 V – 3.6 V) |
+| Backup voltage (VBAT) | 3.0 V nominal (maintains RTC and almanac across power cycles) |
+| UART default baud rate | 9 600 baud, 8-N-1 |
+| UART configurable baud rates | 4 800 / 9 600 / 14 400 / 19 200 / 38 400 / 57 600 / 115 200 via PMTK command |
+| NMEA sentences | $GPRMC, $GPGGA, $GPGSV, $GPGSA, $GNRMC, $GNGGA (and others) |
+| 1PPS output voltage | 3.3 V logic (active HIGH, configurable pulse width, default 100 ms) |
+| Antenna connector | U.FL (IPEX) on-module |
+| Acquisition current | ≈ 18 mA (typical) |
+| Tracking current | ≈ 15 mA (typical) |
+| Standby current | ≈ 1 mA |
+| Cold-start TTFF | ≈ 30 s (open sky, no almanac) |
+| Hot-start TTFF | ≈ 1 s (valid almanac and ephemeris in VBAT-retained RAM) |
+| Tracking sensitivity | −165 dBm |
+| Package | LCC, 10.1 × 9.7 × 2.5 mm |
+| Reference document | `Documentation/` — Quectel L76-M33 Hardware Design Guide and Product Specification |
+
 ### 6.1 Signal Overview
 
-| Signal | GPIO | Level | Notes |
-|--------|------|-------|-------|
-| UART RX (ESP ← GNSS) | 18 | 3.3 V | Receives NMEA sentences |
-| UART TX (ESP → GNSS) | 21 | 3.3 V | Module configuration; may be left unconnected |
-| 1PPS (ESP ← GNSS) | 10 | 3.3 V | Rising-edge interrupt; 100 ms pulse typical |
+| Signal | L76-M33 pin | ESP32-S3 GPIO | Level | Notes |
+|--------|------------|---------------|-------|-------|
+| UART RX (ESP ← GNSS) | TXD | 18 | 3.3 V | NMEA sentence output |
+| UART TX (ESP → GNSS) | RXD | 21 | 3.3 V | PMTK command input |
+| 1PPS (ESP ← GNSS) | 1PPS | 10 | 3.3 V | Rising-edge interrupt; 100 ms pulse (default) |
+| Module power | VCC | — | 3.3 V | Supplied from 3.3 V rail |
+| Backup power | VBAT | — | 3.0 V | Coin cell or supercapacitor (see §6.6) |
 
 ### 6.2 Level Shifting
 
-Most contemporary GNSS modules (u-blox, Quectel) operate at 3.3 V and are directly compatible with ESP32-S3 GPIO logic levels. **No level shifter is required** for 3.3 V modules.
-
-If a 5 V GNSS module is used (legacy hardware), a bidirectional logic-level shifter is required on UART RX and UART TX, and a voltage divider or unidirectional level shifter on the 1PPS line.
+The L76-M33 operates natively at 3.3 V. All UART and 1PPS signals are directly compatible with ESP32-S3 GPIO logic levels. **No level shifter is required.**
 
 ### 6.3 UART Configuration
 
@@ -248,18 +270,32 @@ If a 5 V GNSS module is used (legacy hardware), a bidirectional logic-level shif
 | Peripheral | UART1 (`Serial1`) | No |
 | RX GPIO | 18 | No |
 | TX GPIO | 21 | No |
-| Baud rate | 9600 (default) | Yes — NVS key `clock/gnss_baud` |
+| Baud rate | 9 600 (default) | Yes — NVS key `clock/gnss_baud`; change applied via PMTK set-baud command then firmware reconnect |
 | Frame format | 8-N-1 | No |
 
-At 9600 baud a complete `$GPRMC` sentence (≈ 70 bytes) arrives in ≈ 73 ms, well within the 1-second tick budget.
+At 9 600 baud a complete `$GPRMC` sentence (≈ 70 bytes) arrives in ≈ 73 ms, well within the 1-second tick budget. To change the baud rate at runtime the firmware sends `$PMTK251,<baud>*<checksum><CR><LF>` before reopening `Serial1` at the new rate.
 
 ### 6.4 1PPS Signal
 
-The 1PPS GPIO (GPIO 10) is configured as a rising-edge interrupt with no internal pull resistor. The ISR has a latency budget of < 10 µs (hardware interrupt response on LX7 core). The interrupt is enabled only while `gnss_task` is running (GNSS enabled).
+The L76-M33 1PPS output is 3.3 V active-HIGH with a default pulse width of 100 ms. GPIO 10 is configured as a rising-edge interrupt with no internal pull resistor. The ISR has a latency budget of < 10 µs (hardware interrupt response on LX7 core). The interrupt is enabled only while `gnss_task` is running (GNSS enabled).
 
 ### 6.5 Antenna
 
-The GNSS antenna connection is provided by an **SMA female chassis-mount connector (J1)**. An external active or passive GNSS antenna with SMA male plug connects here. The cable and antenna type are selected based on enclosure placement and available sky view.
+The L76-M33 has an on-module **U.FL (IPEX)** antenna connector. A short U.FL-to-SMA pigtail cable (W1, ≈ 100 mm) connects the module to the **SMA female chassis-mount connector (J1)** on the enclosure panel. An external active or passive GNSS antenna with SMA male plug connects to J1.
+
+Active antennas (with built-in LNA) are recommended for enclosures with limited sky view. The L76-M33 supports active antennas directly; no external LNA bias circuit is required.
+
+### 6.6 Backup Power (VBAT)
+
+The VBAT pin maintains the L76-M33 internal RTC and almanac/ephemeris RAM across main-power cycles, enabling hot-start acquisition (≈ 1 s TTFF vs. ≈ 30 s cold start).
+
+| Option | Component | Notes |
+|--------|-----------|-------|
+| Coin cell (recommended) | MS621FE rechargeable LiMnO₂, 3.0 V | Self-contained; no charge circuit needed; ≈ 2–3 year lifetime at VBAT quiescent current |
+| Supercapacitor | 0.1 F, 3.3 V | Maintains data for several hours after power-off; no battery management |
+| No backup | — | Cold start only (≈ 30 s TTFF); simpler circuit |
+
+Connect VBAT through a Schottky diode (e.g. BAT54, V_f ≈ 0.3 V) from the 3.3 V rail if the coin cell or supercapacitor is omitted, to prevent VBAT floating.
 
 ---
 
@@ -289,8 +325,11 @@ The GNSS antenna connection is provided by an **SMA female chassis-mount connect
 | Panel meter coil current per channel | ≤ I_FSD (≈ 1 mA typical) | Negligible relative to GPIO budget |
 | RC filter current per channel | V_out / R_filter ≈ 3 V / 1 kΩ = 3 mA max | Dominates over meter coil current |
 | Total current from GPIO pins (3 channels) | ≤ 10 mA | Well within limits |
+| GNSS module (L76-M33), acquisition | ≈ 18 mA | Supplied from 3.3 V rail |
+| GNSS module (L76-M33), tracking | ≈ 15 mA | Typical steady-state |
+| Total estimated system current | ≤ 300 mA | ESP32-S3 WiFi active (≈ 240 mA peak) dominates |
 
-The panel meter coils and RC filters present a light load. The LOLIN S3 LDO regulator is the limiting factor for total board current; the meter drive contributes negligibly.
+The L76-M33 adds ≤ 18 mA to the 3.3 V rail. The LOLIN S3 on-board LDO regulator is rated for at least 500 mA output; total system current remains well within that limit.
 
 ---
 
@@ -305,7 +344,9 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 | 3 | R1–R3 | RC filter resistor | 1 kΩ ±1 %, metal film, 250 mW |
 | 3 | C1–C3 | RC filter capacitor | 10 µF, 16 V, electrolytic, radial |
 | 3 | R4–R6 | Panel meter series resistor | 2.0 kΩ ±1 %, metal film (per §4.3; measured I_FSD = 1 mA, R_coil = 82.2 Ω) |
-| 1 | U2 | GNSS receiver module | TBD (3.3 V, NMEA 0183, 1PPS output) |
+| 1 | U2 | GNSS receiver module | Quectel L76-M33 (multi-constellation, 3.3 V, NMEA 0183, 1PPS, U.FL) |
+| 1 | BT1 | GNSS backup battery | MS621FE rechargeable 3.0 V LiMnO₂ coin cell (or 0.1 F supercapacitor) |
+| 1 | W1 | GNSS antenna pigtail | U.FL male to SMA male, ≈ 100 mm |
 | 1 | J1 | GNSS antenna connector | SMA female, chassis mount |
 
 ---
@@ -314,6 +355,6 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 
 | ID | Item | Impact | Status |
 |----|------|--------|--------|
-| HW-001 | GNSS module selection — part number, supply voltage, connector type | Determines whether level shifting is needed (§6.2); sets GNSS UART baud range | Open |
+| HW-001 | GNSS module selection | ✅ Resolved — Quectel L76-M33; 3.3 V, no level shifter required, U.FL antenna connector, default 9 600 baud (see §6) |
 | HW-002 | Series resistor values R4–R6 | ✅ Resolved — I_FSD = 1 mA, V_FSD = 82.2 mV, R_coil = 82.2 Ω → R_series = 2.0 kΩ E24 (see §4.3) |
 | HW-004 | GNSS antenna connector | ✅ Resolved — SMA female chassis connector |

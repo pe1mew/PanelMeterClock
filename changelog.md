@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased] — 2026-04-30
 
+### Added
+- `Design/hardwareTechnicalDesign.md` §6.0 — Quectel L76-M33 module specification table (constellations, supply, baud rates, 1PPS, dimensions, TTFF, sensitivity)
+- `Design/hardwareTechnicalDesign.md` §6.6 — VBAT backup power subsection: MS621FE coin cell or supercapacitor options for hot-start capability
+- `Documentation/` — Quectel L76-M33 hardware design guide and product specification (three documents)
+
+### Changed
+- `Design/hardwareTechnicalDesign.md` §6.1 — signal overview table updated with L76-M33 pin names and VBAT row
+- `Design/hardwareTechnicalDesign.md` §6.2 — level shifting confirmed not required for L76-M33 (3.3 V native)
+- `Design/hardwareTechnicalDesign.md` §6.3 — UART section updated with PMTK baud-rate change command note
+- `Design/hardwareTechnicalDesign.md` §6.4 — 1PPS pulse width referenced to L76-M33 spec (100 ms default)
+- `Design/hardwareTechnicalDesign.md` §6.5 — antenna section updated: U.FL on-module connector, U.FL-to-SMA pigtail (W1) to chassis connector J1
+- `Design/hardwareTechnicalDesign.md` §8 — power table updated with L76-M33 acquisition (18 mA) and tracking (15 mA) current; total system estimate added
+- `Design/hardwareTechnicalDesign.md` §9 — U2 updated to Quectel L76-M33; BT1 (MS621FE backup cell) and W1 (U.FL-to-SMA pigtail) added
+- `Design/hardwareTechnicalDesign.md` §10 — HW-001 closed (Quectel L76-M33 selected)
+- `Design/functionalRequirementsSpecification.md` §4.1 — Quectel L76-M33 datasheet added to hardware references
+- `Design/softwareTechnicalDesign.md` §5.6 — GNSS module identified as Quectel L76-M33
+- `README.md` — hardware table updated with Quectel L76-M33 and antenna pigtail
+
 ### Changed
 - `Design/hardwareTechnicalDesign.md` §4.3 — series resistor formula corrected to include R_filter (1 kΩ) in the DC series chain; measured values added (I_FSD = 1 mA, V_FSD = 82.2 mV, R_coil = 82.2 Ω); calculated R_series = 1917.8 Ω → specified as 2.0 kΩ E24
 - `Design/hardwareTechnicalDesign.md` §9 — R4–R6 value updated to 2.0 kΩ ±1 % metal film
