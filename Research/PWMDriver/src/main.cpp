@@ -1,8 +1,11 @@
 #include <Arduino.h>
 #include "pwm_driver.h"
 
-// Define to disable potentiometer control and use fixed frequency/duty.
+// Select exactly one mode (or neither for full pot control):
+//   POT_CONTROL_DISABLED – fixed 80 kHz / fixed duty (FIXED_DUTY)
+//   SWEEP_MODE           – fixed 80 kHz, duty sweeps 0→pot-max in 60 steps of 1 s each
 // #define POT_CONTROL_DISABLED
+#define SWEEP_MODE
 
 const int   POT_FREQ_PIN        = 1;       // ADC1_CH0 - frequency control potentiometer
 const int   POT_DUTY_PIN        = 2;       // ADC1_CH1 - duty cycle control potentiometer
@@ -20,6 +23,8 @@ const float SUPPLY_VOLTAGE_V    = 3.3f;
 const int   SERIAL_BAUD_RATE    = 115200;
 const int   PRINT_INTERVAL_MS   = 1000;
 const int   CONTROL_INTERVAL_MS = 20;      // 50 Hz update rate
+const int   SWEEP_STEPS         = 60;      // number of steps in SWEEP_MODE
+const int   SWEEP_STEP_MS       = 1000;    // ms per step in SWEEP_MODE
 const int   TASK_STACK_SIZE     = 4096;
 const int   TASK_PRIORITY       = 5;
 const int   NUM_PWM_CHANNELS    = 3;
@@ -35,11 +40,19 @@ static const ledc_timer_t   PWM_TIMERS[NUM_PWM_CHANNELS]   = { LEDC_TIMER_0,   L
 static void control_task(void *arg)
 {
     unsigned long lastPrint = 0;
+#ifdef SWEEP_MODE
+    int sweepStep = 0;
+#endif
 
     for (;;) {
-#ifdef POT_CONTROL_DISABLED
+#if defined(POT_CONTROL_DISABLED)
         int freq = FIXED_FREQ;
         int duty = FIXED_DUTY;
+#elif defined(SWEEP_MODE)
+        int maxDuty = map(analogRead(POT_DUTY_PIN), ADC_MIN, ADC_MAX, DUTY_MIN, DUTY_MAX);
+        int freq    = FIXED_FREQ;
+        int duty    = map(sweepStep, 0, SWEEP_STEPS - 1, 0, maxDuty);
+        sweepStep   = (sweepStep + 1) % SWEEP_STEPS;
 #else
         int rawFreq = analogRead(POT_FREQ_PIN);
         int rawDuty = analogRead(POT_DUTY_PIN);
@@ -58,11 +71,16 @@ static void control_task(void *arg)
             lastPrint = now;
             float dutyPct    = duty / (float)DUTY_MAX * 100.0f;
             float voltageOut = duty / (float)DUTY_MAX * SUPPLY_VOLTAGE_V;
-#ifdef POT_CONTROL_DISABLED
+#if defined(POT_CONTROL_DISABLED)
             Serial0.printf(
                 "Freq: %5d Hz | Duty: %3d/255 (%5.1f%%) | V_out ~%.2f V"
                 " | [fixed]\n",
                 freq, duty, dutyPct, voltageOut);
+#elif defined(SWEEP_MODE)
+            Serial0.printf(
+                "Freq: %5d Hz | Duty: %3d/255 (%5.1f%%) | V_out ~%.2f V"
+                " | step=%2d/60 max=%3d\n",
+                freq, duty, dutyPct, voltageOut, sweepStep, maxDuty);
 #else
             Serial0.printf(
                 "Freq: %5d Hz | Duty: %3d/255 (%5.1f%%) | V_out ~%.2f V"
@@ -71,7 +89,11 @@ static void control_task(void *arg)
 #endif
         }
 
+#ifdef SWEEP_MODE
+        vTaskDelay(pdMS_TO_TICKS(SWEEP_STEP_MS));
+#else
         vTaskDelay(pdMS_TO_TICKS(CONTROL_INTERVAL_MS));
+#endif
     }
 }
 
@@ -79,7 +101,10 @@ void setup()
 {
     Serial0.begin(SERIAL_BAUD_RATE);
 
-#ifndef POT_CONTROL_DISABLED
+#if defined(SWEEP_MODE)
+    analogReadResolution(ADC_RESOLUTION_BITS);
+    analogSetPinAttenuation(POT_DUTY_PIN, ADC_11db);
+#elif !defined(POT_CONTROL_DISABLED)
     analogReadResolution(ADC_RESOLUTION_BITS);
     analogSetPinAttenuation(POT_FREQ_PIN, ADC_11db);
     analogSetPinAttenuation(POT_DUTY_PIN, ADC_11db);

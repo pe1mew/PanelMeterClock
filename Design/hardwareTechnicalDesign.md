@@ -120,20 +120,35 @@ The RC low-pass filter converts the PWM waveform to a quasi-DC voltage. The seri
 
 The factory series resistor is sized for a 1 V drive source. It must be replaced with a higher value to adapt the meter to the 3 V PWM output.
 
-**Procedure:**
+**Measured values (Siemens 1604P, this build):**
 
-1. Measure the meter coil resistance R_coil with an ohmmeter (terminals exposed, series resistor removed or bypassed).
-2. Determine the full-scale current:  
-   `I_FSD = V_FSD_factory / R_coil = 1 V / R_coil`
-3. Calculate the new total series resistance for a 3 V source:  
-   `R_total = V_drive / I_FSD = 3 V / I_FSD`
-4. The new external series resistor value:  
-   `R_series = R_total − R_coil = (3 V / I_FSD) − R_coil = 2 × R_coil`
+| Parameter | Symbol | Measured value |
+|-----------|--------|---------------|
+| Full-scale current | I_FSD | 1.000 mA |
+| Full-scale voltage (coil terminals) | V_FSD | 82.2 mV |
+| Coil resistance (derived) | R_coil | 82.2 Ω |
 
-**Example** — if R_coil measures 1 000 Ω (I_FSD = 1 mA):  
-`R_series = 2 × 1 000 Ω = 2 000 Ω` → use 2 kΩ standard value (E24 series)
+**Formula:**
 
-**Note:** R_coil varies between individual meters. Measure each meter and calculate its series resistor individually. Use a close-tolerance resistor (±1 % metal film) to ensure calibration accuracy is not limited by component tolerance.
+The DC current path is GPIO → R_filter → R_series → coil → GND. R_filter (1 kΩ) is in series at DC and must be included:
+
+```
+R_series = V_drive / I_FSD − R_filter − R_coil
+```
+
+**Calculation:**
+
+```
+R_series = 3.00 V / 1.000 mA − 1 000 Ω − 82.2 Ω
+         = 3 000 − 1 000 − 82.2
+         = 1 917.8 Ω
+```
+
+Nearest E24 standard value: **2.0 kΩ** (next value up, safe — avoids over-deflection).  
+With 2.0 kΩ fitted: I = 3.00 V / (1 000 + 2 000 + 82.2) Ω = **0.973 mA = 97.3 % FSD**.  
+The 2.7 % shortfall is trimmed by the per-meter `full_scale` NVS calibration value (FR-DSP-011).
+
+**Note:** R_coil varies between individual meters even of the same type. Measure each meter and calculate its series resistor individually. Use a close-tolerance resistor (±1 % metal film) to ensure calibration accuracy is not limited by component tolerance.
 
 **Design point:** The firmware uses a full-scale duty of 232/255, corresponding to:
 
@@ -242,6 +257,10 @@ At 9600 baud a complete `$GPRMC` sentence (≈ 70 bytes) arrives in ≈ 73 ms, w
 
 The 1PPS GPIO (GPIO 10) is configured as a rising-edge interrupt with no internal pull resistor. The ISR has a latency budget of < 10 µs (hardware interrupt response on LX7 core). The interrupt is enabled only while `gnss_task` is running (GNSS enabled).
 
+### 6.5 Antenna
+
+The GNSS antenna connection is provided by an **SMA female chassis-mount connector (J1)**. An external active or passive GNSS antenna with SMA male plug connects here. The cable and antenna type are selected based on enclosure placement and available sky view.
+
 ---
 
 ## 7. Serial Debug Interface
@@ -285,8 +304,9 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 | 3 | M1–M3 | Panel meter | Siemens 1604P, 1 V FSD, DC |
 | 3 | R1–R3 | RC filter resistor | 1 kΩ ±1 %, metal film, 250 mW |
 | 3 | C1–C3 | RC filter capacitor | 10 µF, 16 V, electrolytic, radial |
-| 3 | R4–R6 | Panel meter series resistor | Value per §4.3 calculation; ±1 % metal film |
+| 3 | R4–R6 | Panel meter series resistor | 2.0 kΩ ±1 %, metal film (per §4.3; measured I_FSD = 1 mA, R_coil = 82.2 Ω) |
 | 1 | U2 | GNSS receiver module | TBD (3.3 V, NMEA 0183, 1PPS output) |
+| 1 | J1 | GNSS antenna connector | SMA female, chassis mount |
 
 ---
 
@@ -295,6 +315,5 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 | ID | Item | Impact | Status |
 |----|------|--------|--------|
 | HW-001 | GNSS module selection — part number, supply voltage, connector type | Determines whether level shifting is needed (§6.2); sets GNSS UART baud range | Open |
-| HW-002 | Series resistor values R4–R6 — require measurement of individual meter coil resistance | Cannot finalise component list or BOM until meters are measured (§4.3) | Open |
-| HW-003 | PCB vs point-to-point wiring — layout method for the signal conditioning circuit | Affects mechanical integration and RF noise performance | Open |
-| HW-004 | GNSS antenna — internal patch vs external SMA | Depends on enclosure design and available sky view | Open |
+| HW-002 | Series resistor values R4–R6 | ✅ Resolved — I_FSD = 1 mA, V_FSD = 82.2 mV, R_coil = 82.2 Ω → R_series = 2.0 kΩ E24 (see §4.3) |
+| HW-004 | GNSS antenna connector | ✅ Resolved — SMA female chassis connector |
