@@ -1,1 +1,22 @@
+# PlatformIO build output
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# PlatformIO IDE files
+.vscode/
+*.code-workspace
+
+# Hardware scale design backups (CorelDRAW)
 /Hardware/Scale/*.skb
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
