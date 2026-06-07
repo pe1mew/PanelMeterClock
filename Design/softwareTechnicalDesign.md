@@ -65,10 +65,11 @@ lib_deps =
 |---------|--------|---------|-----------|
 | `ESPmDNS` | Built-in (ESP32 Arduino core) | mDNS / DNS-SD registration (FR-NW-010..013) | No extra dependency; ships with the core |
 | `WiFi` | Built-in (ESP32 Arduino core) | STA and AP mode (FR-NW-001..009) | Ships with the core |
-| `ESPAsyncWebServer` + `AsyncTCP` | GitHub (me-no-dev) | Embedded HTTP server and OTA streaming (FR-WEB-001..046) | Non-blocking I/O keeps server responsive during flash writes (resolved: TBD-007) |
+| `ESPAsyncWebServer` + `AsyncTCP` | GitHub (me-no-dev) | Embedded HTTP server and OTA streaming (FR-WEB-001..053) | Non-blocking I/O keeps server responsive during flash writes (resolved: TBD-007) |
 | `Preferences` | Built-in (ESP32 Arduino core) | NVS key-value storage (FR-DSP-010..012, FR-NW-001) | Thin C++ wrapper over ESP-IDF NVS |
 | Custom POSIX TZ parser | In-tree (`src/posix_tz.h`) | DST rule engine (FR-DST-001..006) | POSIX TZ strings are compact, updatable via NVS without firmware rebuild (resolved: TBD-006) |
 | GNSS NMEA parser | TBD — TinyGPS++ or custom | NMEA sentence parsing (FR-GPS-003) | Lightweight; parses $GPRMC/$GNRMC only |
+| DCF77 time-code decoder | In-tree (`src/dcf77.h`) | DCF77 frame decode, validation and DST bits (FR-DCF-003..011) | Simple edge-timing decoder; no external library |
 | mbedTLS | Built-in (ESP-IDF) | Ed25519 / RSA-2048 for FOTA signing (FR-SEC-001..005) | Already present in ESP-IDF; no extra flash cost |
 
 ### 3.3 Partition Table (`partitions_ota.csv`)
@@ -95,20 +96,22 @@ All application work runs in FreeRTOS tasks. The Arduino `loop()` function is le
 | Task name | Core | Priority | Stack (bytes) | Responsibility |
 |-----------|------|----------|---------------|----------------|
 | `display_task` | APP (1) | 10 | 4096 | Drives the three PWM meters; executes once per 1PPS tick event (FR-DSP-007) |
-| `tick_task` | APP (1) | 9 | 2048 | Maintains UTC epoch; synthesises software 1PPS via FreeRTOS timer; arbitrates tick source (FR-TIM-001..006, FR-BOOT-016) |
+| `tick_task` | APP (1) | 9 | 2048 | Maintains UTC epoch; synthesises software 1PPS via FreeRTOS timer; arbitrates tick and epoch source (FR-TIM-001..008, FR-BOOT-016) |
 | `ntp_task` | PRO (0) | 5 | 4096 | Issues NTP queries; disciplines the epoch (FR-NTP-001..004, FR-BOOT-006) |
 | `wifi_task` | PRO (0) | 6 | 4096 | STA connect/reconnect with exponential back-off; AP fallback; mDNS start/stop (FR-NW-001..013) |
 | `gnss_task` | PRO (0) | 7 | 4096 | UART read; NMEA parsing; 1PPS interrupt latch (FR-GPS-001..009); only created when GNSS is enabled |
-| `http_task` | PRO (0) | 4 | 8192 | Embedded web server; serves all GUI pages (FR-WEB-001..046) |
+| `dcf77_task` | PRO (0) | 7 | 3072 | DCF77 time-code edge capture, frame decode and validation, per-second tick (FR-DCF-001..012); only created when DCF77 is enabled |
+| `http_task` | PRO (0) | 4 | 8192 | Embedded web server; serves all GUI pages (FR-WEB-001..053) |
 
 **Inter-task communication:**
 
 | Signal | Mechanism | Produced by | Consumed by |
 |--------|-----------|-------------|-------------|
 | 1PPS tick event | `xTaskNotifyGive` | `tick_task` (software) or GNSS ISR (hardware) | `display_task` |
-| UTC epoch update | Shared `volatile uint64_t` + `portENTER_CRITICAL` | `tick_task`, `ntp_task`, `gnss_task` | All |
-| Tick source selection | Atomic flag (`volatile uint8_t`) | `wifi_task`, `gnss_task`, `ntp_task` | `tick_task` |
-| Config change | FreeRTOS event group | `http_task` | `wifi_task`, `ntp_task`, `gnss_task` |
+| UTC epoch update | Shared `volatile uint64_t` + `portENTER_CRITICAL` | `tick_task`, `ntp_task`, `gnss_task`, `dcf77_task` | All |
+| Tick source selection | Atomic flag (`volatile uint8_t`) | `wifi_task`, `gnss_task`, `ntp_task`, `dcf77_task` | `tick_task` |
+| Epoch source selection | Atomic flag (`volatile uint8_t`) | `gnss_task`, `ntp_task`, `dcf77_task` | `tick_task` |
+| Config change | FreeRTOS event group | `http_task` | `wifi_task`, `ntp_task`, `gnss_task`, `dcf77_task` |
 
 ---
 
@@ -123,11 +126,13 @@ The firmware progresses through three phases (FR-BOOT-001..017). The table below
 | *(start)* | Power-on | `PHASE_1` | Initialise epoch to 0; display 00:00:00; start 1 Hz software tick in `tick_task` |
 | `PHASE_1` | Always (immediately) | `PHASE_2` | Create `wifi_task`; begin STA association attempt |
 | `PHASE_2` | Always (if GNSS enabled) | `PHASE_3` | Create `gnss_task`; start GNSS UART; enable 1PPS GPIO interrupt |
+| `PHASE_2` | Always (if DCF77 enabled) | `PHASE_3` | Create `dcf77_task`; power up receiver; enable time-code GPIO interrupt |
 | `PHASE_2` | WiFi association success | `PHASE_2` (NTP attempt) | Issue NTP query from `ntp_task`; start mDNS; set DHCP hostname |
 | `PHASE_2` | Valid NTP response | `STEADY` (NTP) | Set epoch from NTP; switch tick source to synthesised 1PPS; log sync event (NFR-MNT-002) |
 | `PHASE_2` | WiFi or NTP failure | `PHASE_2` (retry) | Increment retry counter; log; wait 15 s then retry (FR-BOOT-008) |
 | `PHASE_3` | GNSS fix valid | `STEADY` (GNSS override) | Override epoch from GNSS; switch tick source to hardware 1PPS; log (NFR-MNT-002) |
 | `PHASE_3` | GNSS fix lost (> 5 s) | `PHASE_3` (degraded) | Fall back to NTP synthesised 1PPS; log (FR-BOOT-015) |
+| `PHASE_3` | DCF77 valid AND no GNSS AND no NTP | `STEADY` (DCF77) | Set epoch from DCF77 (converted to UTC); drive tick from DCF77 second mark, else synthesised 1PPS; log (FR-BOOT-019) |
 | `STEADY` (any) | NTP re-sync interval elapsed | `STEADY` | Issue NTP query; step epoch if error > 1 s, else slew (FR-TIM-006) |
 | `STEADY` (any) | GNSS fix re-acquired | `STEADY` (GNSS override) | Re-enable hardware 1PPS; update epoch |
 | `STEADY` (any) | Watchdog timeout | `PHASE_1` | Hardware reset; boot from scratch (NFR-REL-001..002) |
@@ -180,11 +185,16 @@ The internal clock is a 64-bit UTC epoch (`uint64_t utc_epoch_s`) plus a sub-sec
 **Tick source arbitration** (FR-BOOT-016..017):
 
 ```
-GNSS enabled AND fix valid?
-  YES → hardware 1PPS ISR drives display_task (Priority 1)
-  NO  → NTP sync obtained?
-          YES → software FreeRTOS timer drives display_task (Priority 2)
-          NO  → free-running 1 Hz software timer (Priority 3)
+Tick mechanism (drives display_task):
+  GNSS fix valid?          → hardware GNSS 1PPS ISR      (Priority 1)
+  else DCF77 mark present?  → DCF77 per-second-mark ISR   (Priority 2)
+  else                     → synthesised software 1PPS   (Priority 3)
+
+Epoch source (sets utc_epoch_s — highest available wins):
+  GNSS fix valid    → GNSS UTC                 (Priority 1)
+  else NTP synced   → NTP-disciplined epoch    (Priority 2)
+  else DCF77 valid  → DCF77 civil time → UTC   (Priority 3)
+  else              → free-running 1 Hz        (Priority 4)
 ```
 
 ### 5.4 NTP Client
@@ -292,14 +302,15 @@ DST transitions are applied atomically by writing the new UTC offset to a `volat
 
 ```
 / (root — redirects to /status)
-├── /status        Clock Status      (FR-WEB-030..034)
+├── /status        Clock Status      (FR-WEB-030..035)
 ├── /calibrate     Meter Calibration (FR-WEB-010..015)
 ├── /wifi          WiFi Configuration(FR-WEB-020..024)
 ├── /gnss          GNSS Configuration(FR-WEB-025..027)
+├── /dcf77         DCF77 Configuration(FR-WEB-050..053)
 └── /update        Firmware Update   (FR-WEB-040..046)
 ```
 
-All pages share a navigation bar with links to all five endpoints (FR-WEB-002..003).
+All pages share a navigation bar with links to all six endpoints (FR-WEB-002..003).
 
 **FOTA flow** (FR-WEB-040..046):
 
@@ -312,6 +323,29 @@ All pages share a navigation bar with links to all five endpoints (FR-WEB-002..0
 ### 5.9 NVS Storage
 
 All persistent configuration uses the ESP-IDF `Preferences` library (namespace `"clock"` and `"meter"`). Keys, types, and defaults are listed in Section 6 below. NVS corruption is detected at startup by checking the `Preferences.begin()` return value; on corruption the namespace is cleared and factory defaults are written (NFR-REL-003).
+
+### 5.10 DCF77 Subsystem
+
+**Receiver:** A longwave 77.5 kHz DCF77 receiver module with a ferrite-rod antenna and a demodulated, open-collector time-code output (see PMC-HTD-001 §7).
+
+`dcf77_task` is created only when the `dcf77_enabled` NVS flag is set (FR-DCF-001..002). When DCF77 is disabled the receiver is held off via its enable line and the time-code interrupt is detached.
+
+**Signal decoding:** The demodulated signal carries one amplitude-reduced mark per second (≈ 100 ms = binary 0, ≈ 200 ms = binary 1); the mark is omitted in second 59 to delimit the minute. An edge-triggered GPIO interrupt timestamps each edge; `dcf77_task` measures the active-pulse width to recover each bit and assembles the 59-bit minute frame. Bits 17–18 carry the CEST/CET announcement; the minute, hour and date fields are protected by even-parity bits.
+
+**Hardware assignments (resolved):**
+
+| Signal | GPIO | Direction | Notes |
+|--------|------|-----------|-------|
+| Time-code input | **GPIO 11** | Input, internal pull-up | Edge interrupt; polarity configurable (FR-DCF-004) |
+| Receiver enable (PON) | **GPIO 12** | Output | Drives the module on/off; held off when DCF77 disabled |
+
+**Validation and override:** A DCF77 time is accepted only after two consecutive, parity-valid, time-consistent minute frames (FR-DCF-007). The decoded CET/CEST time is converted to UTC using the time-zone bits Z1/Z2 (FR-DCF-009) and written to `utc_epoch_s` only while no valid GNSS fix and no NTP sync are present (FR-DCF-008). A subsequent GNSS fix or NTP sync overrides it. Loss of reception for longer than the configurable timeout (`DCF77_SIGNAL_LOST_TIMEOUT_S`, default 300 s) leaves the epoch running on the synthesised 1PPS (FR-DCF-010).
+
+**DST change (FR-DCF-011):** Z1/Z2 give the current CET/CEST offset and the A1 bit announces a pending change one hour ahead, so the UTC derived from DCF77 stays continuous across a CET↔CEST transition. Display daylight saving remains governed by the DST engine (§5.7), independent of the DCF77 zone bits.
+
+**Tick reference (FR-DCF-012):** the same edge interrupt that decodes the time-code also yields a once-per-second on-time mark. While GNSS 1PPS is absent and DCF77 marks are arriving, `tick_task` advances the 1-second tick from the DCF77 edge and phase-aligns the synthesised 1PPS to it; reception gaps fall back to the software 1PPS seamlessly.
+
+**Polarity:** `dcf77_invert` (NVS) selects the active edge/level to match the receiver's output stage.
 
 ---
 
@@ -329,6 +363,8 @@ All persistent configuration uses the ESP-IDF `Preferences` library (namespace `
 | `clock` | `gnss_baud` | uint32 | `9600` | TBD-002 (resolved) |
 | `clock` | `gnss_lat_cache` | float | `0.0` | FR-GPS-009 |
 | `clock` | `gnss_lon_cache` | float | `0.0` | FR-GPS-009 |
+| `clock` | `dcf77_enabled` | uint8 | `0` (disabled) | FR-DCF-001 |
+| `clock` | `dcf77_invert` | uint8 | `0` (non-inverted) | FR-DCF-004 |
 | `clock` | `posix_tz` | string | `"CET-1CEST,M3.5.0,M10.5.0/3"` | FR-DST-001, TBD-006 (resolved) |
 | `meter` | `h_zero` | uint8 | `0` | FR-DSP-010 |
 | `meter` | `h_full` | uint8 | `232` | FR-DSP-011, FR-DSP-014 |
@@ -366,6 +402,10 @@ All magic numbers shall be defined as named constants. The following table lists
 | `GNSS_UART_RX_GPIO` | 18 | IC-HW-004, TBD-002 (resolved) |
 | `GNSS_UART_TX_GPIO` | 21 | IC-HW-004, TBD-002 (resolved) |
 | `GNSS_DEFAULT_BAUD` | 9600 | TBD-002 (resolved) |
+| `DCF77_SIGNAL_GPIO` | 11 | IC-HW-005, TBD-008 (resolved) |
+| `DCF77_PON_GPIO` | 12 | IC-HW-006, TBD-009 (resolved) |
+| `DCF77_ENABLED_DEFAULT` | 0 | FR-DCF-002 |
+| `DCF77_SIGNAL_LOST_TIMEOUT_S` | 300 | FR-DCF-010 |
 | `DST_REFRESH_INTERVAL_S` | 86400 | FR-DST-004 |
 | `GEOIP_PRIMARY_URL` | `"http://ip-api.com/json/?fields=timezone"` | FR-DST-004, TBD-005 (resolved) |
 | `GEOIP_FALLBACK_URL` | `"http://worldtimeapi.org/api/ip"` | FR-DST-004, TBD-005 (resolved) |
@@ -449,3 +489,15 @@ Each item below must be resolved before the indicated module can be implemented.
 ### TBD-007 — HTTP Server Library — ✅ RESOLVED
 
 **Decision:** **`ESPAsyncWebServer` + `AsyncTCP`** (GitHub: me-no-dev). Non-blocking event-driven model keeps the server responsive during OTA flash writes for progress reporting (FR-WEB-044). `serveStatic()` handles SPIFFS asset serving with no boilerplate. Added to `platformio.ini` `lib_deps` (§3.1). See HTTP server design (§5.8).
+
+---
+
+### TBD-008 — DCF77 Time-Code Input GPIO Pin — ✅ RESOLVED
+
+**Decision:** **GPIO 11** — interrupt-capable, free on LOLIN S3, configured as an input with the internal pull-up enabled to suit an open-collector receiver output. Signal polarity is configurable via NVS key `clock/dcf77_invert` (FR-DCF-004). See constant `DCF77_SIGNAL_GPIO` (§7), DCF77 subsystem design (§5.10) and PMC-HTD-001 §3, §7.
+
+---
+
+### TBD-009 — DCF77 Receiver Enable (PON) GPIO Pin — ✅ RESOLVED
+
+**Decision:** **GPIO 12** — push-pull output driving the receiver's power-on/enable line; the module is held off when DCF77 is disabled (FR-DCF-002). See constant `DCF77_PON_GPIO` (§7), DCF77 subsystem design (§5.10) and PMC-HTD-001 §3, §7.

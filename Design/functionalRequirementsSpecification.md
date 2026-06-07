@@ -51,6 +51,7 @@ This document defines all functional and non-functional requirements for the Pan
 - Boot phase state machine and time-source management
 - NTP synchronisation and WiFi connectivity
 - GNSS receiver integration and 1PPS tick discipline
+- DCF77 longwave radio time-code receiver integration (offline time source)
 - Automatic Daylight Saving Time (DST) detection and transition
 - Embedded web GUI (calibration, configuration, status, FOTA)
 - Firmware Over The Air (FOTA) with asymmetric-key authentication
@@ -71,7 +72,7 @@ This document defines all functional and non-functional requirements for the Pan
 
 ### 2.4 How to Read This Document
 
-Sections 6 through 13 contain numbered requirements in the form `<Type>-<Domain>-<NNN>` (see Section 3 for the numbering scheme). Each requirement is atomic and independently testable.
+Sections 6 through 14 contain numbered requirements in the form `<Type>-<Domain>-<NNN>` (see Section 3 for the numbering scheme). Each requirement is atomic and independently testable.
 
 Section 5 provides a system-level overview with priority hierarchies. Appendix B contains a complete boot-phase state-transition table. Appendix F tracks all open issues and TBD items.
 
@@ -83,6 +84,8 @@ Section 5 provides a system-level overview with priority hierarchies. Appendix B
 |------|------------|
 | 1PPS | One Pulse Per Second — a precise timing signal, typically from a GNSS receiver, used as a hardware tick source |
 | AP mode | Access Point mode — the ESP32-S3 hosts its own WiFi network for client devices to connect to |
+| CET / CEST | Central European Time (UTC+1) / Central European Summer Time (UTC+2) — the civil time broadcast by the DCF77 transmitter |
+| DCF77 | The German longwave (77.5 kHz) time-signal service transmitted from Mainflingen and derived from PTB atomic clocks; carries the full date and time once per minute. Used here as an offline radio time source |
 | DST | Daylight Saving Time — the seasonal clock adjustment applied in many jurisdictions |
 | Duty cycle | The fraction of one PWM period during which the output signal is high, expressed as an 8-bit integer (0 = 0 %, 255 = 100 %) |
 | FOTA | Firmware Over The Air — uploading and applying new firmware via the embedded web GUI without physical access |
@@ -116,6 +119,7 @@ Section 5 provides a system-level overview with priority hierarchies. Appendix B
 | WEMOS LOLIN S3 Dimensions | `Documentation/dim_s3_v1.0.0.pdf` |
 | Siemens 1604P Panel Meter (DC 10.00 GF024T005) | `Documentation/` — Siemens product documentation |
 | Quectel L76-M33 GNSS Module | `Documentation/` — Quectel L76-M33 Hardware Design Guide and Product Specification |
+| DCF77 Receiver Module | `Documentation/` — DCF77 longwave (77.5 kHz) receiver module; ferrite antenna, demodulated time-code output |
 
 ### 4.2 Software and Protocol Standards
 
@@ -124,6 +128,7 @@ Section 5 provides a system-level overview with priority hierarchies. Appendix B
 | Network Time Protocol v4 | IETF RFC 5905 |
 | NMEA 0183 GNSS Sentence Standard | NMEA 0183 v4.11 |
 | IANA Time Zone Database | https://www.iana.org/time-zones |
+| DCF77 Time-Code Format | PTB (Physikalisch-Technische Bundesanstalt) DCF77 specification |
 | ESP-IDF LEDC Peripheral Guide | Espressif ESP-IDF Programming Guide, LEDC chapter |
 | ESP-IDF OTA Update Guide | Espressif ESP-IDF Programming Guide, OTA chapter |
 
@@ -181,6 +186,8 @@ PanelMeterClock is a wall clock that displays the current **local time** on thre
                          ESP32-S3
 ```
 
+> An optional **DCF77 longwave receiver** (77.5 kHz) also connects to the ESP32-S3 via a single demodulated time-code GPIO (plus an enable line). It provides UTC time only — no location data.
+
 ### 5.3 Operating Modes Summary
 
 | Mode | Entry condition | Active time sources | Web GUI |
@@ -188,12 +195,13 @@ PanelMeterClock is a wall clock that displays the current **local time** on thre
 | Phase 1 — Free-running | Power-on | Internal timer (1 Hz software tick) | Available (no WiFi, AP on) |
 | Phase 2 — NTP | Phase 1 active; WiFi credentials stored | Internal timer + NTP discipline | Available when WiFi connected after timeout AP is made active |
 | Phase 3 — GNSS | Phase 2 active; GNSS enabled | GNSS 1PPS (preferred) or NTP synthesized | Available |
+| DCF77 (parallel) | DCF77 enabled | DCF77 radio time when GNSS and NTP are unavailable | Available |
 | Steady-state | Any phase completes initial sync | Best available source | Always available |
 | AP mode | STA connection unavailable | Free-running or last synced time | Available on AP |
 
 ### 5.4 Time Source Priority Hierarchy
 
-The firmware arbitrates between three time sources. Higher priority sources override lower priority sources when they become available.
+The firmware arbitrates between four time sources. Higher priority sources override lower priority sources when they become available.
 
 ```
 Priority 1 (highest): GNSS 1PPS + GNSS time
@@ -204,7 +212,12 @@ Priority 2: NTP-synchronized time with synthesized 1PPS
     └─ Software timer disciplined by NTP
     └─ 1PPS synthesized from the corrected internal clock
 
-Priority 3 (lowest, always available): Free-running internal clock
+Priority 3: DCF77 longwave radio time
+    └─ Decoded DCF77 time (CET/CEST via Z1/Z2) converted to UTC sets the epoch
+    └─ 1-second tick taken from the DCF77 per-second mark; synthesized when reception drops
+    └─ Used only when no GNSS fix and no NTP sync are available
+
+Priority 4 (lowest, always available): Free-running internal clock
     └─ ESP32-S3 internal timer at nominally 1 Hz
     └─ No external correction; accumulates drift
 ```
@@ -291,8 +304,17 @@ Phases 1, 2, and 3 all run concurrently once started. The display runs continuou
 
 | ID | Requirement |
 |----|-------------|
-| FR-BOOT-016 | Transition between hardware 1PPS (GNSS) and software 1PPS (NTP) in either direction shall not cause the displayed seconds value to jump by more than 1 count. |
-| FR-BOOT-017 | The currently active tick source (GNSS hardware 1PPS or NTP synthesised) shall be logged to the serial debug output whenever it changes (see NFR-MNT-002). |
+| FR-BOOT-016 | Transition between any tick sources — GNSS hardware 1PPS, the DCF77 per-second mark, or the synthesised software 1PPS — in any direction shall not cause the displayed seconds value to jump by more than 1 count. |
+| FR-BOOT-017 | The currently active tick source (GNSS hardware 1PPS, DCF77 per-second mark, or synthesised software 1PPS) shall be logged to the serial debug output whenever it changes (see NFR-MNT-002). |
+
+### 6.6 DCF77 Monitoring
+
+| ID | Requirement |
+|----|-------------|
+| FR-BOOT-018 | When DCF77 is enabled (FR-DCF-001), the system shall monitor the DCF77 receiver in parallel with Phase 2 and Phase 3, beginning at the same time as Phase 2. |
+| FR-BOOT-019 | When a valid DCF77 time is available (FR-DCF-007) and neither a valid GNSS fix nor a successful NTP sync is present, the system shall set the internal UTC epoch from the DCF77 time (converted to UTC per FR-DCF-009). |
+| FR-BOOT-020 | A GNSS fix or NTP sync that subsequently becomes available shall override the DCF77-derived epoch with no discontinuity in the displayed time beyond ±1 second. |
+| FR-BOOT-021 | The active epoch source (GNSS / NTP / DCF77 / free-running) shall be logged to the serial debug output whenever it changes (see NFR-MNT-002). |
 
 ---
 
@@ -347,6 +369,7 @@ Phases 1, 2, and 3 all run concurrently once started. The display runs continuou
 | FR-TIM-004 | When the active tick source is the hardware GNSS 1PPS, the firmware shall increment the UTC epoch on each rising edge of the 1PPS input GPIO. |
 | FR-TIM-005 | When the active tick source is the synthesised NTP tick, the firmware shall increment the UTC epoch using a FreeRTOS timer calibrated against the last NTP response. |
 | FR-TIM-006 | Accumulated clock error detected by NTP re-sync shall be corrected by stepping the internal epoch (not slewing) if the error exceeds 1 second, or by adjusting the FreeRTOS timer period if the error is ≤ 1 second. |
+| FR-TIM-007 | When the active tick source is the DCF77 per-second mark, the firmware shall advance the 1-second tick on each DCF77 second edge and phase-align the synthesised 1PPS to it, so that reception gaps are bridged by the synthesised tick without a displayed-time discontinuity (FR-DCF-012). |
 
 ### 8.3 NTP Synchronisation
 
@@ -356,6 +379,12 @@ Phases 1, 2, and 3 all run concurrently once started. The display runs continuou
 | FR-NTP-002 | The default NTP server address shall be `pool.ntp.org`. |
 | FR-NTP-003 | After the initial NTP sync, the firmware shall re-query the NTP server at a configurable interval stored in NVS (default: 3600 seconds). |
 | FR-NTP-004 | The NTP stratum of the responding server, the timestamp of the last successful sync, and the next scheduled sync time shall be stored in RAM and exposed on the status page (FR-WEB-032). |
+
+### 8.4 Epoch Source Arbitration
+
+| ID | Requirement |
+|----|-------------|
+| FR-TIM-008 | The firmware shall arbitrate the UTC epoch source by the priority GNSS > NTP > DCF77 > free-running internal clock (Section 5.4); a higher-priority source shall override a lower-priority one as soon as it becomes available. |
 
 ---
 
@@ -396,7 +425,7 @@ Phases 1, 2, and 3 all run concurrently once started. The display runs continuou
 
 ### 10.1 DST Source Selection
 
-The DST engine selects a location source according to the priority hierarchy in Section 5.5. If neither GNSS nor IP geolocation can provide a location, no DST offset is applied and the UTC base offset is used as-is.
+The DST engine selects a location source according to the priority hierarchy in Section 5.5. If neither GNSS nor IP geolocation can provide a location, no DST offset is applied and the UTC base offset is used as-is. DCF77, although an atomic-derived time source, conveys no geographic location and is therefore never used as a DST location source.
 
 ### 10.2 DST Requirements
 
@@ -451,7 +480,7 @@ The DST engine selects a location source according to the priority hierarchy in 
 |----|-------------|
 | FR-WEB-001 | The embedded HTTP server shall listen on TCP port 80. |
 | FR-WEB-002 | All pages shall be reachable from a persistent navigation menu present on every page. |
-| FR-WEB-003 | The navigation menu shall include links to: Calibration (`/calibrate`), WiFi (`/wifi`), GNSS (`/gnss`), Status (`/status`), and Firmware Update (`/update`). |
+| FR-WEB-003 | The navigation menu shall include links to: Calibration (`/calibrate`), WiFi (`/wifi`), GNSS (`/gnss`), DCF77 (`/dcf77`), Status (`/status`), and Firmware Update (`/update`). |
 | FR-WEB-004 | All static assets (HTML, CSS, JavaScript, images) shall be served from device flash; no external CDN dependencies are permitted. |
 | FR-WEB-005 | The GUI shall be functional in any standards-compliant browser with JavaScript enabled; no browser extension or application installation is required. |
 
@@ -484,17 +513,27 @@ The DST engine selects a location source according to the priority hierarchy in 
 | FR-WEB-026 | The page shall provide a toggle control to enable or disable GNSS. The change shall be persisted to NVS and applied without requiring a device reboot. |
 | FR-WEB-027 | When GNSS is enabled, the page shall display: fix status (valid / no fix), number of satellites in use, current latitude, and current longitude. |
 
-### 12.5 Page: Clock Status (`/status`)
+### 12.5 Page: DCF77 Configuration (`/dcf77`)
+
+| ID | Requirement |
+|----|-------------|
+| FR-WEB-050 | The DCF77 configuration page shall display the current DCF77 enabled / disabled state. |
+| FR-WEB-051 | The page shall provide a toggle control to enable or disable DCF77. The change shall be persisted to NVS and applied without requiring a device reboot. |
+| FR-WEB-052 | The page shall provide a control to select the DCF77 signal polarity (active-high / active-low), persisted to NVS. |
+| FR-WEB-053 | When DCF77 is enabled, the page shall display the reception state: whether a second-mark signal is currently detected, the current decode/lock state, and the timestamp of the last successfully decoded frame. |
+
+### 12.6 Page: Clock Status (`/status`)
 
 | ID | Requirement |
 |----|-------------|
 | FR-WEB-030 | The status page shall display: current UTC time, current local time, active UTC offset (hours and minutes), DST state (active / inactive), and DST source (GNSS / IP geolocation / none). |
-| FR-WEB-031 | The status page shall display the active tick source: GNSS hardware 1PPS or NTP synthesised 1PPS. |
+| FR-WEB-031 | The status page shall display the active epoch source (GNSS / NTP / DCF77 / free-running) and the active tick source (GNSS hardware 1PPS, DCF77 per-second mark, or synthesised 1PPS). |
 | FR-WEB-032 | The status page shall display: configured NTP server address, time of last successful NTP sync, NTP stratum of the last response, and time of next scheduled NTP sync. |
 | FR-WEB-033 | The status page shall display Phase 2 NTP retry count and timestamp of the last retry attempt. |
 | FR-WEB-034 | The status page shall auto-refresh all dynamic data at a 5-second interval without a full page reload (e.g., via JavaScript fetch or WebSocket). |
+| FR-WEB-035 | The status page shall display the DCF77 reception state (signal detected / decoding / locked) and the timestamp of the last successfully decoded DCF77 frame. |
 
-### 12.6 Page: Firmware Update (`/update`)
+### 12.7 Page: Firmware Update (`/update`)
 
 | ID | Requirement |
 |----|-------------|
@@ -534,9 +573,57 @@ The DST engine selects a location source according to the priority hierarchy in 
 
 ---
 
-## 14. Non-Functional Requirements
+## 14. Functional Requirements — DCF77 Subsystem
 
-### 14.1 Performance
+The DCF77 subsystem provides an offline radio time reference derived from the German DCF77 longwave time signal. In the time-source priority hierarchy (Section 5.4) it sits at **Priority 3** — below GNSS (Priority 1) and NTP (Priority 2), and above the free-running internal clock (Priority 4). It supplies UTC time only; it does not provide location data for the DST engine.
+
+### 14.1 Enable / Disable
+
+| ID | Requirement |
+|----|-------------|
+| FR-DCF-001 | DCF77 support shall be independently enabled or disabled via the web GUI DCF77 page (FR-WEB-050 through FR-WEB-053). The setting shall be persisted in NVS. |
+| FR-DCF-002 | DCF77 shall be disabled by default. When disabled, the DCF77 task and its signal-input interrupt shall be inactive, the receiver shall be held powered-down via its enable line, and no DCF77-related resources shall be allocated. |
+
+### 14.2 Signal Input and Decoding
+
+| ID | Requirement |
+|----|-------------|
+| FR-DCF-003 | The firmware shall capture the demodulated DCF77 time-code signal on a dedicated interrupt-capable GPIO and measure the active-pulse width of each one-second mark to decode the transmitted bits. |
+| FR-DCF-004 | The DCF77 signal polarity (active-high or active-low) shall be configurable via NVS to suit the connected receiver module's output stage. |
+| FR-DCF-005 | The firmware shall decode the DCF77 one-minute time-code frame, recovering minute, hour, day, day-of-week, month and year together with the time-zone bits Z1/Z2 (`01` = CET, `10` = CEST) and the impending-DST-change announcement bit (A1). |
+| FR-DCF-006 | Each decoded frame shall be validated using the DCF77 parity bits (minute, hour and date) and the missing mark at second 59 that delimits the minute. A frame failing any parity or framing check shall be discarded. |
+
+### 14.3 Time Validity and Override
+
+| ID | Requirement |
+|----|-------------|
+| FR-DCF-007 | A DCF77 time shall be considered valid only after two consecutive minute frames decode without error and are time-consistent (the second frame equals the first plus one minute). |
+| FR-DCF-008 | When a valid DCF77 time is available and neither a valid GNSS fix (FR-GPS-005) nor a successful NTP synchronisation is present, the firmware shall set the internal UTC epoch from the DCF77 time. DCF77 shall never override a GNSS- or NTP-derived epoch. |
+| FR-DCF-009 | DCF77 transmits Central European Time (CET, UTC+1) or Central European Summer Time (CEST, UTC+2). The firmware shall convert the decoded civil time to UTC using the frame's time-zone bits — Z1/Z2 = `01` (CET) → subtract 1 h, Z1/Z2 = `10` (CEST) → subtract 2 h — before writing the UTC epoch. |
+
+### 14.4 Loss of Reception
+
+| ID | Requirement |
+|----|-------------|
+| FR-DCF-010 | Loss of DCF77 reception (no valid frame within a configurable timeout, default 300 s) shall not cause any discontinuity in the displayed time; the clock shall continue on the synthesised 1PPS and fall back to the next-highest available source per Section 5.4. |
+
+### 14.5 DST-Change Handling
+
+| ID | Requirement |
+|----|-------------|
+| FR-DCF-011 | The firmware shall evaluate the time-zone bits (Z1/Z2) on every decoded frame and the impending-change announcement bit (A1, set during the hour before a CET↔CEST switch). The UTC epoch derived from DCF77 shall remain continuous across a CET↔CEST transition; the one-hour step in the broadcast civil time shall not produce a step or gap in the internal UTC epoch. (Display daylight-saving handling remains governed by the DST engine, Section 10.) |
+
+### 14.6 Tick Reference
+
+| ID | Requirement |
+|----|-------------|
+| FR-DCF-012 | The leading edge of each DCF77 per-second mark shall be usable as a 1-second tick reference. Whenever a valid GNSS 1PPS is not available and the DCF77 second mark is being received, the firmware shall drive the 1-second tick from the DCF77 mark and use it to phase-align the synthesised 1PPS; on loss of the mark the tick shall revert to the synthesised software 1PPS with no displayed-time discontinuity (FR-BOOT-016). |
+
+---
+
+## 15. Non-Functional Requirements
+
+### 15.1 Performance
 
 | ID | Requirement |
 |----|-------------|
@@ -544,7 +631,7 @@ The DST engine selects a location source according to the priority hierarchy in 
 | NFR-PERF-002 | All web GUI pages shall complete initial load within 3 seconds over a typical WiFi connection. |
 | NFR-PERF-003 | NTP query processing shall execute in a dedicated FreeRTOS task and shall not block the display update task. |
 
-### 14.2 Reliability
+### 15.2 Reliability
 
 | ID | Requirement |
 |----|-------------|
@@ -552,20 +639,20 @@ The DST engine selects a location source according to the priority hierarchy in 
 | NFR-REL-002 | Following a watchdog reset, the system shall boot normally and re-enter Phase 1 as if starting from power-on. |
 | NFR-REL-003 | NVS corruption shall be detected at startup. If detected, the firmware shall erase and reinitialise the NVS namespace to factory defaults and log the event to the serial debug output. |
 
-### 14.3 Power and Electrical
+### 15.3 Power and Electrical
 
 | ID | Requirement |
 |----|-------------|
 | NFR-PWR-001 | On power-down or reset, PWM outputs shall be driven to duty 0 (0 V) within one PWM cycle to prevent sustained non-zero voltage on the meter coils. |
 
-### 14.4 Maintainability
+### 15.4 Maintainability
 
 | ID | Requirement |
 |----|-------------|
 | NFR-MNT-001 | All user-configurable parameters (NTP server, retry interval, AP timeout, etc.) and all NVS key names shall be defined as named constants; no magic numbers or literal strings shall appear in application code. |
 | NFR-MNT-002 | The firmware shall emit a structured serial debug log at 115200 baud via UART0 (USB-CDC / CH340). Log entries shall include, at minimum: boot phase transitions, tick source changes, NTP sync events (success and failure), GNSS fix state changes, DST transitions, and OTA events. |
 
-### 14.5 Portability
+### 15.5 Portability
 
 | ID | Requirement |
 |----|-------------|
@@ -573,9 +660,9 @@ The DST engine selects a location source according to the priority hierarchy in 
 
 ---
 
-## 15. Interface Requirements
+## 16. Interface Requirements
 
-### 15.1 Hardware Interfaces
+### 16.1 Hardware Interfaces
 
 | ID | Requirement |
 |----|-------------|
@@ -583,8 +670,10 @@ The DST engine selects a location source according to the priority hierarchy in 
 | IC-HW-002 | Each PWM output channel has a dedicated RC low-pass filter. The firmware shall not assume a filter cutoff frequency other than ≈ 16 Hz. Component values and circuit design are specified in PMC-HTD-001 §4.4. |
 | IC-HW-003 | The GNSS 1PPS input is connected to GPIO 10, configured as input with no internal pull resistor. The firmware shall register a rising-edge interrupt on this pin. Pin assignment details are in PMC-HTD-001 §3. |
 | IC-HW-004 | The GNSS UART interface uses UART1 (GPIO 18 RX, GPIO 21 TX). The default baud rate is 9 600; it is configurable via NVS. Interface details are in PMC-HTD-001 §6. |
+| IC-HW-005 | The DCF77 demodulated time-code signal is connected to GPIO 11, configured as an interrupt-capable input with the internal pull-up enabled. Signal polarity is configurable in firmware (FR-DCF-004). Pin details are in PMC-HTD-001 §7. |
+| IC-HW-006 | The DCF77 receiver enable (power-on) line is driven by GPIO 12 as a push-pull output; the receiver is held disabled when DCF77 is off (FR-DCF-002). Pin details are in PMC-HTD-001 §7. |
 
-### 15.2 Software and Protocol Interfaces
+### 16.2 Software and Protocol Interfaces
 
 | ID | Requirement |
 |----|-------------|
@@ -592,8 +681,9 @@ The DST engine selects a location source according to the priority hierarchy in 
 | IC-SW-002 | GNSS data shall be received as NMEA 0183 sentences. The firmware shall at minimum parse `$GPRMC` and `$GNRMC` sentence types. |
 | IC-SW-003 | The web GUI shall be served over HTTP/1.1 on TCP port 80. HTTPS is deferred to a future version (see Appendix F). |
 | IC-SW-004 | The OTA firmware update mechanism shall use the ESP-IDF dual-slot OTA partition layout (one active OTA slot, one inactive OTA slot, plus factory partition). |
+| IC-SW-005 | DCF77 time information shall be decoded from the demodulated one-minute amplitude-modulated time-code frame as specified by the PTB DCF77 standard. |
 
-### 15.3 Human Interfaces
+### 16.3 Human Interfaces
 
 | ID | Requirement |
 |----|-------------|
@@ -602,7 +692,7 @@ The DST engine selects a location source according to the priority hierarchy in 
 
 ---
 
-## 16. Design Constraints
+## 17. Design Constraints
 
 | ID | Constraint |
 |----|------------|
@@ -612,10 +702,11 @@ The DST engine selects a location source according to the priority hierarchy in 
 | DC-004 | PWM resolution is fixed at 8 bits (0–255 duty steps) at 80 kHz with an 80 MHz LEDC clock. This gives 256 discrete meter positions; no fractional duty is available. |
 | DC-005 | The flash partition table must include two OTA application partitions. The partition table is a build-time configuration and cannot be changed by FOTA. |
 | DC-006 | The public key for FOTA signature verification is embedded in the firmware binary at build time. It cannot be modified at runtime and is excluded from OTA writes by the partition layout. |
+| DC-007 | DCF77 reception is limited to Central Europe (≈ 2 000 km from Mainflingen, Germany) and depends on adequate longwave signal strength at the installation site. DCF77 is therefore an optional, region-specific time source and the design shall not rely on it being available. |
 
 ---
 
-## 17. Appendices
+## 18. Appendices
 
 ### Appendix A — Requirements Traceability Matrix
 
@@ -624,14 +715,16 @@ The DST engine selects a location source according to the priority hierarchy in 
 | FR-BOOT-001..004 | Boot / Phase 1 | TC-BOOT-001 | |
 | FR-BOOT-005..010 | Boot / Phase 2 / NTP | TC-BOOT-002 | |
 | FR-BOOT-011..017 | Boot / Phase 3 / GNSS | TC-BOOT-003 | |
+| FR-BOOT-018..021 | Boot / DCF77 monitoring | TC-BOOT-004 | |
 | FR-DSP-001..014 | Display / meters | TC-DSP-001 | |
-| FR-TIM-001..006 | Timekeeping | TC-TIM-001 | |
+| FR-TIM-001..008 | Timekeeping | TC-TIM-001 | |
 | FR-NTP-001..004 | NTP sync | TC-NTP-001 | |
 | FR-GPS-001..009 | GNSS subsystem | TC-GPS-001 | |
+| FR-DCF-001..012 | DCF77 subsystem | TC-DCF-001 | |
 | FR-DST-001..006 | DST engine | TC-DST-001 | |
 | FR-NW-001..009 | Network / WiFi | TC-NW-001 | |
 | FR-NW-010..013 | Network / mDNS | TC-NW-002 | |
-| FR-WEB-001..046 | Web GUI | TC-WEB-001..005 | One test case per page |
+| FR-WEB-001..053 | Web GUI | TC-WEB-001..006 | One test case per page |
 | FR-SEC-001..007 | FOTA security | TC-SEC-001 | |
 | NFR-* | Non-functional | TC-NFR-001 | Performance, watchdog |
 
@@ -674,3 +767,5 @@ Moved to **PMC-STD-001 Software Technical Design, Section 6**.
 | TBD-005 | IP geolocation service URL and API format | ✅ Resolved | ip-api.com (primary), worldtimeapi.org (fallback) — see PMC-STD-001 §5.7, §7 |
 | TBD-006 | Timezone rules library | ✅ Resolved | Custom POSIX TZ string parser; rule stored in NVS key `clock/posix_tz` — see PMC-STD-001 §5.7, §6, §7 |
 | TBD-007 | HTTP server library | ✅ Resolved | ESPAsyncWebServer + AsyncTCP — see PMC-STD-001 §3.1, §5.8 |
+| TBD-008 | DCF77 time-code input GPIO pin | ✅ Resolved | GPIO 11 — interrupt-capable, internal pull-up; see PMC-STD-001 §7, PMC-HTD-001 §3, §7 |
+| TBD-009 | DCF77 receiver enable (PON) GPIO pin | ✅ Resolved | GPIO 12 — push-pull output; see PMC-STD-001 §7, PMC-HTD-001 §3, §7 |

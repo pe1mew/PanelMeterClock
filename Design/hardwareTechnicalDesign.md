@@ -75,6 +75,8 @@ All application GPIO assignments are listed below. This table is the single auth
 | GPIO | Signal | Direction | Peripheral | Connected to | Requirement |
 |------|--------|-----------|------------|--------------|-------------|
 | 10 | GNSS 1PPS | Input | GPIO interrupt | GNSS module 1PPS output | IC-HW-003, TBD-001 |
+| 11 | DCF77 time-code | Input | GPIO interrupt | DCF77 receiver time-code output | IC-HW-005, TBD-008 |
+| 12 | DCF77 enable (PON) | Output | GPIO | DCF77 receiver enable input | IC-HW-006, TBD-009 |
 | 15 | PWM Hours | Output | LEDC_CHANNEL_0 / LEDC_TIMER_0 | RC filter → Hours meter | IC-HW-001 |
 | 16 | PWM Minutes | Output | LEDC_CHANNEL_1 / LEDC_TIMER_1 | RC filter → Minutes meter | IC-HW-001 |
 | 17 | PWM Seconds | Output | LEDC_CHANNEL_2 / LEDC_TIMER_2 | RC filter → Seconds meter | IC-HW-001 |
@@ -85,7 +87,7 @@ All application GPIO assignments are listed below. This table is the single auth
 | 43 | Debug TX | Output | UART0 / CH340 | USB-serial chip | Fixed |
 | 44 | Debug RX | Input | UART0 / CH340 | USB-serial chip | Fixed |
 
-GPIO 10 is configured as input-only with no internal pull resistor (IC-HW-003). All PWM outputs are push-pull 3.3 V. GPIO 21 (GNSS TX) may be left unconnected if the GNSS module requires no runtime configuration.
+GPIO 10 is configured as input-only with no internal pull resistor (IC-HW-003). GPIO 11 (DCF77 time-code) is an interrupt-capable input with the internal pull-up enabled (IC-HW-005); GPIO 12 (DCF77 enable) is a push-pull output (IC-HW-006). All PWM outputs are push-pull 3.3 V. GPIO 21 (GNSS TX) may be left unconnected if the GNSS module requires no runtime configuration.
 
 ---
 
@@ -299,7 +301,45 @@ Connect VBAT through a Schottky diode (e.g. BAT54, V_f ≈ 0.3 V) from the 3.3 V
 
 ---
 
-## 7. Serial Debug Interface
+## 7. DCF77 Receiver Interface
+
+### 7.0 Module — DCF77 Longwave Receiver
+
+| Parameter | Value |
+|-----------|-------|
+| Signal | DCF77 longwave time signal, 77.5 kHz |
+| Transmitter | Mainflingen, Germany (PTB atomic-clock reference) |
+| Coverage | ≈ 2 000 km radius (Central Europe) |
+| Antenna | Ferrite rod (supplied with module) |
+| Supply voltage | 3.3 V |
+| Output | Demodulated time-code; one mark per second (open-collector, requires pull-up) |
+| Enable input | Power-on (PON) control line |
+| Typical current | ≈ 1–2 mA |
+
+### 7.1 Signal Overview
+
+| Signal | Module pin | ESP32-S3 GPIO | Level | Notes |
+|--------|-----------|---------------|-------|-------|
+| Time-code output | TCO / OUT | 11 | 3.3 V | One mark/second; ≈ 100 ms = 0, ≈ 200 ms = 1; gap at second 59 |
+| Enable | PON / EN | 12 | 3.3 V | Powers the receiver on/off |
+| Power | VCC | — | 3.3 V | From 3.3 V rail |
+| Ground | GND | — | 0 V | Common ground |
+
+### 7.2 Level Shifting
+
+The receiver operates at 3.3 V; its output is directly compatible with ESP32-S3 GPIO logic levels. **No level shifter is required.** The open-collector time-code output uses the ESP32-S3 internal pull-up on GPIO 11 (IC-HW-005).
+
+### 7.3 Time-Code Signal
+
+DCF77 transmits one amplitude-reduced mark per second: ≈ 100 ms for a binary 0 and ≈ 200 ms for a binary 1, with no mark in the 59th second to delimit the minute. GPIO 11 is configured as an edge interrupt; the firmware measures each pulse width to decode the bits and assembles the one-minute frame (PMC-STD-001 §5.10). The leading edge of each mark is an on-time second boundary and is also used as a 1-second tick reference (FR-DCF-012). Signal polarity is configurable in firmware (FR-DCF-004) to accommodate modules with inverted outputs.
+
+### 7.4 Antenna and Siting
+
+The ferrite-rod antenna should be mounted away from switching-noise sources (the ESP32-S3, the USB supply and the panel-meter PWM lines) and oriented broadside toward Frankfurt for best reception. Reception is region-specific (DC-007) and is generally weaker indoors than GNSS; DCF77 is therefore an optional, supplementary time source.
+
+---
+
+## 8. Serial Debug Interface
 
 | Parameter | Value |
 |-----------|-------|
@@ -314,7 +354,7 @@ Connect VBAT through a Schottky diode (e.g. BAT54, V_f ≈ 0.3 V) from the 3.3 V
 
 ---
 
-## 8. Power Supply
+## 9. Power Supply
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
@@ -327,13 +367,14 @@ Connect VBAT through a Schottky diode (e.g. BAT54, V_f ≈ 0.3 V) from the 3.3 V
 | Total current from GPIO pins (3 channels) | ≤ 10 mA | Well within limits |
 | GNSS module (L76-M33), acquisition | ≈ 18 mA | Supplied from 3.3 V rail |
 | GNSS module (L76-M33), tracking | ≈ 15 mA | Typical steady-state |
+| DCF77 receiver module | ≈ 1–2 mA | Supplied from 3.3 V rail; negligible |
 | Total estimated system current | ≤ 300 mA | ESP32-S3 WiFi active (≈ 240 mA peak) dominates |
 
 The L76-M33 adds ≤ 18 mA to the 3.3 V rail. The LOLIN S3 on-board LDO regulator is rated for at least 500 mA output; total system current remains well within that limit.
 
 ---
 
-## 9. Component List (Partial)
+## 10. Component List (Partial)
 
 This list covers the signal conditioning and display subsystem. Connectors, PCB, and enclosure are out of scope.
 
@@ -348,13 +389,17 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 | 1 | BT1 | GNSS backup battery | MS621FE rechargeable 3.0 V LiMnO₂ coin cell (or 0.1 F supercapacitor) |
 | 1 | W1 | GNSS antenna pigtail | U.FL male to SMA male, ≈ 100 mm |
 | 1 | J1 | GNSS antenna connector | SMA female, chassis mount |
+| 1 | U3 | DCF77 receiver module | 77.5 kHz longwave receiver with ferrite antenna, 3.3 V, demodulated time-code output |
+| 1 | E1 | DCF77 ferrite antenna | Ferrite-rod antenna (supplied with U3) |
 
 ---
 
-## 10. Open Hardware Issues
+## 11. Open Hardware Issues
 
 | ID | Item | Impact | Status |
 |----|------|--------|--------|
 | HW-001 | GNSS module selection | ✅ Resolved — Quectel L76-M33; 3.3 V, no level shifter required, U.FL antenna connector, default 9 600 baud (see §6) |
 | HW-002 | Series resistor values R4–R6 | ✅ Resolved — I_FSD = 1 mA, V_FSD = 82.2 mV, R_coil = 82.2 Ω → R_series = 2.0 kΩ E24 (see §4.3) |
 | HW-004 | GNSS antenna connector | ✅ Resolved — SMA female chassis connector |
+| HW-005 | DCF77 receiver module selection | ⚠ Open — generic 77.5 kHz module assumed (3.3 V, demodulated time-code output); confirm specific part and ferrite antenna |
+| HW-006 | DCF77 GPIO assignment | ✅ Resolved — time-code GPIO 11 (input, pull-up), enable GPIO 12 (output); see §3, §7 |
