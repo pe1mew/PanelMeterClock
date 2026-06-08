@@ -28,6 +28,7 @@
 |----------|------|
 | PMC-FRS-001 Functional Requirements Specification | Defines *what* the system shall do |
 | PMC-STD-001 Software Technical Design | Defines firmware architecture and module design |
+| PMC-GUI-001 GUI / User Interface Specification | Defines the physical operator interface (panel, status LEDs, encoder, connectors) |
 | This document (PMC-HTD-001) | Defines *how* the hardware is designed and wired |
 
 ---
@@ -39,10 +40,10 @@
 | Attribute | Value |
 |-----------|-------|
 | Module | WEMOS LOLIN S3 |
-| SoC | ESP32-S3-WROOM-1 |
+| SoC / module | ESP32-S3-WROOM-1-N16R8 |
 | CPU | Xtensa LX7 dual-core, up to 240 MHz |
-| Flash | 16 MB QSPI |
-| PSRAM | 8 MB (WROOM-1 variant) |
+| Flash | 16 MB quad SPI (N16) |
+| PSRAM | 8 MB octal SPI (R8) |
 | SRAM | 512 KB |
 | WiFi | 802.11b/g/n 2.4 GHz |
 | GPIO voltage | 3.3 V (not 5 V-tolerant) |
@@ -59,7 +60,8 @@ The table below lists all GPIO pins available for application use after reservin
 | 3 | Strapping | — | Do not use |
 | 19 | USB D− (UART0 / USB-CDC) | — | Debug serial |
 | 20 | USB D+ (UART0 / USB-CDC) | — | Debug serial |
-| 26–32 | SPI flash (internal) | — | Not accessible |
+| 26–32 | In-package SPI flash (N16) | — | Not accessible |
+| 33–37 | In-package octal SPI PSRAM (R8) | — | Not accessible on N16R8 |
 | 43 | UART0 TX (CH340) | Output | Debug serial TX |
 | 44 | UART0 RX (CH340) | Input | Debug serial RX |
 | 45 | Strapping | — | Avoid |
@@ -74,9 +76,17 @@ All application GPIO assignments are listed below. This table is the single auth
 
 | GPIO | Signal | Direction | Peripheral | Connected to | Requirement |
 |------|--------|-----------|------------|--------------|-------------|
+| 4 | LED — RTC status | Output | GPIO | Front-panel status LED (series R) | IC-HW-008, PMC-GUI-001 |
+| 5 | LED — DCF status | Output | GPIO | Front-panel status LED (series R) | IC-HW-008, PMC-GUI-001 |
+| 6 | LED — NTP status | Output | GPIO | Front-panel status LED (series R) | IC-HW-008, PMC-GUI-001 |
+| 7 | LED — GNSS status | Output | GPIO | Front-panel status LED (series R) | IC-HW-008, PMC-GUI-001 |
+| 8 | I2C SDA | I/O | I2C | DS1307 RTC (via 3.3 V↔5 V level shifter) | IC-HW-007, TBD-010 |
+| 9 | I2C SCL | Output | I2C | DS1307 RTC (via 3.3 V↔5 V level shifter) | IC-HW-007, TBD-010 |
 | 10 | GNSS 1PPS | Input | GPIO interrupt | GNSS module 1PPS output | IC-HW-003, TBD-001 |
 | 11 | DCF77 time-code | Input | GPIO interrupt | DCF77 receiver time-code output | IC-HW-005, TBD-008 |
 | 12 | DCF77 enable (PON) | Output | GPIO | DCF77 receiver enable input | IC-HW-006, TBD-009 |
+| 13 | Encoder A | Input | GPIO interrupt | Rotary encoder channel A (pull-up) | IC-HW-009, PMC-GUI-001 |
+| 14 | Encoder B | Input | GPIO interrupt | Rotary encoder channel B (pull-up) | IC-HW-009, PMC-GUI-001 |
 | 15 | PWM Hours | Output | LEDC_CHANNEL_0 / LEDC_TIMER_0 | RC filter → Hours meter | IC-HW-001 |
 | 16 | PWM Minutes | Output | LEDC_CHANNEL_1 / LEDC_TIMER_1 | RC filter → Minutes meter | IC-HW-001 |
 | 17 | PWM Seconds | Output | LEDC_CHANNEL_2 / LEDC_TIMER_2 | RC filter → Seconds meter | IC-HW-001 |
@@ -86,8 +96,9 @@ All application GPIO assignments are listed below. This table is the single auth
 | 21 | GNSS UART TX | Output | UART1 (Serial1) | GNSS module RX | IC-HW-004, TBD-002 |
 | 43 | Debug TX | Output | UART0 / CH340 | USB-serial chip | Fixed |
 | 44 | Debug RX | Input | UART0 / CH340 | USB-serial chip | Fixed |
+| 47 | Encoder button | Input | GPIO interrupt | Encoder push button (pull-up) | IC-HW-009, PMC-GUI-001 |
 
-GPIO 10 is configured as input-only with no internal pull resistor (IC-HW-003). GPIO 11 (DCF77 time-code) is an interrupt-capable input with the internal pull-up enabled (IC-HW-005); GPIO 12 (DCF77 enable) is a push-pull output (IC-HW-006). All PWM outputs are push-pull 3.3 V. GPIO 21 (GNSS TX) may be left unconnected if the GNSS module requires no runtime configuration.
+GPIO 10 is configured as input-only with no internal pull resistor (IC-HW-003). GPIO 11 (DCF77 time-code) is an interrupt-capable input with the internal pull-up enabled (IC-HW-005); GPIO 12 (DCF77 enable) is a push-pull output (IC-HW-006). GPIO 8/9 carry the I2C bus to the DS1307 RTC via a 3.3 V↔5 V level shifter (IC-HW-007). GPIO 4–7 drive the four front-panel status LEDs (push-pull, each with a series resistor); GPIO 13/14 are the rotary-encoder A/B channels and GPIO 47 the encoder push button — all inputs with internal pull-ups and firmware debounce (PMC-GUI-001). All PWM outputs are push-pull 3.3 V. GPIO 21 (GNSS TX) may be left unconnected if the GNSS module requires no runtime configuration.
 
 ---
 
@@ -339,7 +350,44 @@ The ferrite-rod antenna should be mounted away from switching-noise sources (the
 
 ---
 
-## 8. Serial Debug Interface
+## 8. RTC Interface
+
+### 8.0 Device — DS1307Z
+
+| Parameter | Value |
+|-----------|-------|
+| Part | Maxim DS1307Z (SOIC-8) |
+| Type | I2C real-time clock + 56-byte NVRAM |
+| I2C address | 0x68 (fixed) |
+| Supply voltage | 5 V (4.5 – 5.5 V) |
+| Backup | VBAT coin cell, 3 V (CR2032) |
+| Timebase | external 32.768 kHz crystal (12.5 pF) |
+| Typical current | ≈ 1.5 mA (VCC) / ≈ 300–500 nA (battery, powered off) |
+| SQW/OUT | not used in this design |
+
+### 8.1 Signal Overview
+
+| Signal | DS1307 pin | ESP32-S3 GPIO | Level | Notes |
+|--------|-----------|---------------|-------|-------|
+| I2C SDA | SDA | 8 | 3.3 V ↔ 5 V (shifted) | Via level shifter |
+| I2C SCL | SCL | 9 | 3.3 V ↔ 5 V (shifted) | Via level shifter |
+| Supply | VCC | — | 5 V | From the USB 5 V rail |
+| Backup | VBAT | — | 3 V | CR2032 coin cell |
+| Crystal | X1 / X2 | — | — | 32.768 kHz, 12.5 pF |
+
+### 8.2 5 V Operation and Level Shifting
+
+The DS1307 requires a 5 V supply, and its logic-high threshold (V_IH ≈ 0.7 × VCC ≈ 3.5 V) is above the ESP32-S3's 3.3 V output. The I2C bus is therefore routed through a **bidirectional MOSFET level shifter** (3.3 V on the ESP32 side, 5 V on the DS1307 side) with pull-ups on each side. The ESP32-S3 is not 5 V tolerant, so the DS1307 I2C lines must not connect to it directly.
+
+*(A 3.3 V RTC such as the DS3231 would remove the level shifter and improve accuracy; the DS1307Z is the selected part — see PMC-STD-001 §8 TBD-010.)*
+
+### 8.3 Backup Battery
+
+A CR2032 coin cell on VBAT keeps the DS1307 running while main power is off, so the time of day is retained (FR-RTC-001). The DS1307 clock-halt / oscillator-stopped flag is read at boot to detect a depleted cell or first use (FR-RTC-005).
+
+---
+
+## 9. Serial Debug Interface
 
 | Parameter | Value |
 |-----------|-------|
@@ -354,7 +402,7 @@ The ferrite-rod antenna should be mounted away from switching-noise sources (the
 
 ---
 
-## 9. Power Supply
+## 10. Power Supply
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
@@ -368,19 +416,20 @@ The ferrite-rod antenna should be mounted away from switching-noise sources (the
 | GNSS module (L76-M33), acquisition | ≈ 18 mA | Supplied from 3.3 V rail |
 | GNSS module (L76-M33), tracking | ≈ 15 mA | Typical steady-state |
 | DCF77 receiver module | ≈ 1–2 mA | Supplied from 3.3 V rail; negligible |
+| DS1307 RTC | ≈ 1.5 mA | Supplied from the 5 V rail; ≈ µA on the backup battery when powered off |
 | Total estimated system current | ≤ 300 mA | ESP32-S3 WiFi active (≈ 240 mA peak) dominates |
 
 The L76-M33 adds ≤ 18 mA to the 3.3 V rail. The LOLIN S3 on-board LDO regulator is rated for at least 500 mA output; total system current remains well within that limit.
 
 ---
 
-## 10. Component List (Partial)
+## 11. Component List (Partial)
 
 This list covers the signal conditioning and display subsystem. Connectors, PCB, and enclosure are out of scope.
 
 | Qty | Reference | Description | Value / Part number |
 |-----|-----------|-------------|-------------------|
-| 1 | U1 | Microcontroller module | WEMOS LOLIN S3 (ESP32-S3-WROOM-1, 16 MB flash) |
+| 1 | U1 | Microcontroller module | WEMOS LOLIN S3 (ESP32-S3-WROOM-1-N16R8: 16 MB flash + 8 MB octal PSRAM) |
 | 3 | M1–M3 | Panel meter | Siemens 1604P, 1 V FSD, DC |
 | 3 | R1–R3 | RC filter resistor | 1 kΩ ±1 %, metal film, 250 mW |
 | 3 | C1–C3 | RC filter capacitor | 10 µF, 16 V, electrolytic, radial |
@@ -391,10 +440,18 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 | 1 | J1 | GNSS antenna connector | SMA female, chassis mount |
 | 1 | U3 | DCF77 receiver module | 77.5 kHz longwave receiver with ferrite antenna, 3.3 V, demodulated time-code output |
 | 1 | E1 | DCF77 ferrite antenna | Ferrite-rod antenna (supplied with U3) |
+| 1 | U4 | Real-time clock | Maxim DS1307Z (I2C, SOIC-8) |
+| 1 | Y1 | RTC crystal | 32.768 kHz, 12.5 pF load |
+| 1 | BT2 | RTC backup battery | CR2032 coin cell + holder, 3 V |
+| 1 | U5 | I2C level shifter | Bidirectional 3.3 V ↔ 5 V, 2-channel (e.g. BSS138-based) |
+| 2 | R7,R8 | I2C pull-up resistors | 4.7 kΩ (3.3 V side; 5 V side per shifter module) |
+| 4 | D1–D4 | Status LEDs | White, 3 mm — front panel RTC/DCF/NTP/GNSS |
+| 4 | R9–R12 | LED series resistors | ≈ 1 kΩ (tune for brightness) |
+| 1 | SW1 | Rotary encoder | Incremental quadrature encoder with push button |
 
 ---
 
-## 11. Open Hardware Issues
+## 12. Open Hardware Issues
 
 | ID | Item | Impact | Status |
 |----|------|--------|--------|
@@ -403,3 +460,25 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 | HW-004 | GNSS antenna connector | ✅ Resolved — SMA female chassis connector |
 | HW-005 | DCF77 receiver module selection | ⚠ Open — generic 77.5 kHz module assumed (3.3 V, demodulated time-code output); confirm specific part and ferrite antenna |
 | HW-006 | DCF77 GPIO assignment | ✅ Resolved — time-code GPIO 11 (input, pull-up), enable GPIO 12 (output); see §3, §7 |
+| HW-007 | RTC selection and interface | ✅ Resolved — DS1307Z on I2C (SDA 8 / SCL 9, addr 0x68); 5 V part, I2C level-shifted to 3.3 V; 32.768 kHz crystal; CR2032 backup (see §8) |
+| HW-008 | RTC backup battery life | ⚠ Open — confirm CR2032 lifetime at the DS1307 backup current and specify the holder / replacement access |
+| HW-009 | Panel LED and encoder GPIOs | ✅ Resolved — LEDs GPIO 4–7; encoder A/B/button GPIO 13/14/47 (see §3, PMC-GUI-001) |
+
+---
+
+## 13. Verification and Test Criteria (Hardware)
+
+Electrical and mechanical checks supporting the functional acceptance criteria of PMC-FRS-001. Firmware-level test cases are in PMC-STD-001 §9.
+
+| ID | Method / setup | Pass criterion | Verifies |
+|----|----------------|----------------|----------|
+| HV-01 | Sweep each meter channel duty 0→232; measure V_out at the RC filter node | Output linear with duty (R² ≥ 0.999); ≈ 0 V at 0, ≈ 3.0 V at 232 | FR-DSP-004..006, DC-003..004 |
+| HV-02 | At full-scale duty, check needle against the mechanical end-stop | Needle near full scale with margin to the end-stop | FR-DSP-005, FR-DSP-014 |
+| HV-03 | Observe ripple at the meter terminals at a held duty | Ripple negligible (< ~1 % FSD); no visible needle jitter | FR-DSP-008, IC-HW-002 |
+| HV-04 | Power-off / reset and observe the needles | Needles fall to zero promptly (no sustained drive) | NFR-PWR-001 |
+| HV-05 | Check logic levels on the GNSS and DCF77 signal pins | All within 3.3 V logic; no level shifter required | IC-HW-003..006 |
+| HV-06 | Verify GNSS antenna path and backup-power hot-start | Fix acquired via the antenna; hot-start after brief power loss | §6.5, §6.6 |
+| HV-07 | Verify DCF77 reception with the ferrite antenna sited away from noise | Frames decode reliably at the installation site | FR-DCF-005..007, DC-007 |
+| HV-08 | Measure total supply current in the worst case | Within the LOLIN S3 LDO budget | §10 |
+| HV-09 | Verify RTC I2C communication, timekeeping and battery-backup retention | RTC responds at 0x68; keeps time; retains time with main power removed (coin cell fitted) | FR-RTC-001..005, IC-HW-007 |
+| HV-10 | Verify each status LED and the rotary encoder | All four LEDs controllable; encoder produces clean quadrature steps and debounced button events | IC-HW-008..009, PMC-GUI-001 |

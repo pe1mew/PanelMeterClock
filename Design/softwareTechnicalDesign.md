@@ -33,10 +33,10 @@ This document is the companion technical design to **PMC-FRS-001 (Functional Req
 
 | Attribute | Value |
 |-----------|-------|
-| Module | WEMOS LOLIN S3 (ESP32-S3-WROOM-1) |
+| Module | WEMOS LOLIN S3 (ESP32-S3-WROOM-1-N16R8) |
 | CPU | Xtensa LX7 dual-core, 240 MHz |
-| Flash | 16 MB (QSPI) |
-| RAM | 512 KB SRAM + 8 MB PSRAM (WROOM-1) |
+| Flash | 16 MB quad SPI (N16) |
+| RAM | 512 KB SRAM + 8 MB octal PSRAM (R8) |
 | Framework | Arduino on ESP-IDF 5.x |
 | Build system | PlatformIO |
 | RTOS | FreeRTOS (provided by ESP-IDF Arduino core) |
@@ -51,6 +51,7 @@ This document is the companion technical design to **PMC-FRS-001 (Functional Req
 [env:lolin_s3]
 platform         = espressif32
 board            = lolin_s3
+board_build.arduino.memory_type = qio_opi   ; N16R8: 16 MB quad flash + 8 MB octal PSRAM
 framework        = arduino
 monitor_speed    = 115200
 board_build.partitions = partitions_ota.csv
@@ -70,6 +71,7 @@ lib_deps =
 | Custom POSIX TZ parser | In-tree (`src/posix_tz.h`) | DST rule engine (FR-DST-001..006) | POSIX TZ strings are compact, updatable via NVS without firmware rebuild (resolved: TBD-006) |
 | GNSS NMEA parser | TBD — TinyGPS++ or custom | NMEA sentence parsing (FR-GPS-003) | Lightweight; parses $GPRMC/$GNRMC only |
 | DCF77 time-code decoder | In-tree (`src/dcf77.h`) | DCF77 frame decode, validation and DST bits (FR-DCF-003..011) | Simple edge-timing decoder; no external library |
+| RTC driver (DS1307) | RTClib or in-tree (`src/ds1307.h`) | Battery-backed RTC over I2C (FR-RTC-001..006) | BCD register read/write at I2C address 0x68 |
 | mbedTLS | Built-in (ESP-IDF) | Ed25519 / RSA-2048 for FOTA signing (FR-SEC-001..005) | Already present in ESP-IDF; no extra flash cost |
 
 ### 3.3 Partition Table (`partitions_ota.csv`)
@@ -96,12 +98,13 @@ All application work runs in FreeRTOS tasks. The Arduino `loop()` function is le
 | Task name | Core | Priority | Stack (bytes) | Responsibility |
 |-----------|------|----------|---------------|----------------|
 | `display_task` | APP (1) | 10 | 4096 | Drives the three PWM meters; executes once per 1PPS tick event (FR-DSP-007) |
-| `tick_task` | APP (1) | 9 | 2048 | Maintains UTC epoch; synthesises software 1PPS via FreeRTOS timer; arbitrates tick and epoch source (FR-TIM-001..008, FR-BOOT-016) |
+| `tick_task` | APP (1) | 9 | 2048 | Maintains UTC epoch; synthesises software 1PPS via FreeRTOS timer; arbitrates tick and epoch source; seeds from and writes back the RTC (FR-TIM-001..008, FR-RTC-001..006, FR-BOOT-016) |
 | `ntp_task` | PRO (0) | 5 | 4096 | Issues NTP queries; disciplines the epoch (FR-NTP-001..004, FR-BOOT-006) |
 | `wifi_task` | PRO (0) | 6 | 4096 | STA connect/reconnect with exponential back-off; AP fallback; mDNS start/stop (FR-NW-001..013) |
 | `gnss_task` | PRO (0) | 7 | 4096 | UART read; NMEA parsing; 1PPS interrupt latch (FR-GPS-001..009); only created when GNSS is enabled |
 | `dcf77_task` | PRO (0) | 7 | 3072 | DCF77 time-code edge capture, frame decode and validation, per-second tick (FR-DCF-001..012); only created when DCF77 is enabled |
 | `http_task` | PRO (0) | 4 | 8192 | Embedded web server; serves all GUI pages (FR-WEB-001..053) |
+| `ui_task` | APP (1) | 8 | 2048 | Drives the four status LEDs and services the rotary encoder / time-set (PMC-GUI-001) |
 
 **Inter-task communication:**
 
@@ -194,7 +197,7 @@ Epoch source (sets utc_epoch_s — highest available wins):
   GNSS fix valid    → GNSS UTC                 (Priority 1)
   else NTP synced   → NTP-disciplined epoch    (Priority 2)
   else DCF77 valid  → DCF77 civil time → UTC   (Priority 3)
-  else              → free-running 1 Hz        (Priority 4)
+  else              → RTC (DS1307)             (Priority 4)
 ```
 
 ### 5.4 NTP Client
@@ -347,6 +350,31 @@ All persistent configuration uses the ESP-IDF `Preferences` library (namespace `
 
 **Polarity:** `dcf77_invert` (NVS) selects the active edge/level to match the receiver's output stage.
 
+### 5.11 RTC (DS1307)
+
+**Device:** Maxim **DS1307Z** I2C real-time clock (address `0x68`), 32.768 kHz crystal, coin-cell backup on VBAT (PMC-HTD-001 §8). The DS1307 operates at 5 V, so the I2C bus is level-shifted to the ESP32-S3's 3.3 V (PMC-HTD-001 §8).
+
+The RTC is the persistent time-of-day store and the Priority-4 time source:
+
+- **Boot:** `utc_epoch_s` is seeded from the RTC. The DS1307 clock-halt / oscillator-stopped flag is checked; if set (first use or lost backup power) the time is treated as invalid — the clock starts at 00:00:00 and the RTC indicator shows invalid (FR-RTC-005, PMC-GUI-001).
+- **Discipline:** whenever GNSS, NTP or DCF77 yields accurate UTC, the corrected time is written back to the DS1307 (FR-RTC-003) so the retained time stays accurate across power cycles.
+- **Fallback:** when no higher source is available, the displayed time is kept by the synthesised 1 Hz tick seeded from the RTC and is periodically re-aligned to it.
+- **Manual set:** the rotary encoder writes the DS1307 directly (FR-RTC-004, PMC-GUI-001); the value is held on the backup battery.
+
+All times in the DS1307 are stored as **UTC**, consistent with the internal epoch; conversion to local time for display is applied downstream (§5.7).
+
+**Hardware assignment (resolved):** I2C `SDA` = GPIO 8, `SCL` = GPIO 9 (PMC-HTD-001 §3). The DS1307 `SQW/OUT` pin is unused in this design.
+
+### 5.12 Panel Indicators and Control
+
+Implements the physical operator interface specified in PMC-GUI-001; serviced by `ui_task`.
+
+**Status LEDs (UI-IND):** four outputs drive the front-panel RTC/DCF/NTP/GNSS LEDs (GPIO 4–7, push-pull, series resistors). Each LED is off (source disabled/absent), blinking at `UI_BLINK_HZ` (≈ 1 Hz, acquiring) or steady (valid). The RTC LED is steady while the clock runs on the RTC and blinks ≈ 1 Hz when the RTC time is invalid; it blinks at `UI_SET_BLINK_HZ` (≈ 2 Hz) while set mode is active. The active source is the highest-priority lit LED (GNSS > NTP > DCF > RTC).
+
+**Rotary encoder (UI-CTL):** quadrature channels on GPIO 13/14 and a push button on GPIO 47, all inputs with internal pull-ups and firmware debounce. A long press (`UI_LONGPRESS_MS`, 2 s) enters set mode at Hours; rotation adjusts the active field (wrapping); a short press advances Hours → Minutes → Seconds; a short press after Seconds writes the new time to the RTC (§5.11). Inactivity for `UI_SET_TIMEOUT_S` (30 s) exits without applying. While a field is edited the corresponding meter tracks the value. In normal mode the encoder has no effect (reserved).
+
+Pin assignments are in PMC-HTD-001 §3; constants in §7.
+
 ---
 
 ## 6. NVS Key Inventory
@@ -406,6 +434,20 @@ All magic numbers shall be defined as named constants. The following table lists
 | `DCF77_PON_GPIO` | 12 | IC-HW-006, TBD-009 (resolved) |
 | `DCF77_ENABLED_DEFAULT` | 0 | FR-DCF-002 |
 | `DCF77_SIGNAL_LOST_TIMEOUT_S` | 300 | FR-DCF-010 |
+| `RTC_I2C_ADDR` | 0x68 | IC-HW-007, FR-RTC-001 |
+| `I2C_SDA_GPIO` | 8 | IC-HW-007, TBD-010 (resolved) |
+| `I2C_SCL_GPIO` | 9 | IC-HW-007, TBD-010 (resolved) |
+| `LED_RTC_GPIO` | 4 | IC-HW-008, PMC-GUI-001 |
+| `LED_DCF_GPIO` | 5 | IC-HW-008, PMC-GUI-001 |
+| `LED_NTP_GPIO` | 6 | IC-HW-008, PMC-GUI-001 |
+| `LED_GNSS_GPIO` | 7 | IC-HW-008, PMC-GUI-001 |
+| `ENC_A_GPIO` | 13 | IC-HW-009, PMC-GUI-001 |
+| `ENC_B_GPIO` | 14 | IC-HW-009, PMC-GUI-001 |
+| `ENC_BTN_GPIO` | 47 | IC-HW-009, PMC-GUI-001 |
+| `UI_LONGPRESS_MS` | 2000 | PMC-GUI-001 UI-CTL-002 |
+| `UI_SET_TIMEOUT_S` | 30 | PMC-GUI-001 UI-CTL-007 |
+| `UI_BLINK_HZ` | 1 | PMC-GUI-001 UI-IND |
+| `UI_SET_BLINK_HZ` | 2 | PMC-GUI-001 UI-IND-008 |
 | `DST_REFRESH_INTERVAL_S` | 86400 | FR-DST-004 |
 | `GEOIP_PRIMARY_URL` | `"http://ip-api.com/json/?fields=timezone"` | FR-DST-004, TBD-005 (resolved) |
 | `GEOIP_FALLBACK_URL` | `"http://worldtimeapi.org/api/ip"` | FR-DST-004, TBD-005 (resolved) |
@@ -501,3 +543,188 @@ Each item below must be resolved before the indicated module can be implemented.
 ### TBD-009 — DCF77 Receiver Enable (PON) GPIO Pin — ✅ RESOLVED
 
 **Decision:** **GPIO 12** — push-pull output driving the receiver's power-on/enable line; the module is held off when DCF77 is disabled (FR-DCF-002). See constant `DCF77_PON_GPIO` (§7), DCF77 subsystem design (§5.10) and PMC-HTD-001 §3, §7.
+
+---
+
+### TBD-010 — RTC (DS1307) I2C Pins and 5 V Interface — ✅ RESOLVED
+
+**Decision:** **DS1307Z** at I2C address `0x68`, **SDA = GPIO 8, SCL = GPIO 9**. The DS1307 runs at 5 V; the I2C bus is level-shifted to 3.3 V (bidirectional MOSFET shifter, PMC-HTD-001 §8). A 32.768 kHz crystal and a coin-cell backup on VBAT are required. See constants `RTC_I2C_ADDR`, `I2C_SDA_GPIO`, `I2C_SCL_GPIO` (§7) and RTC design (§5.11). *(A 3.3 V RTC such as the DS3231 would avoid the level shifter and offer better accuracy — noted as an alternative, not selected.)*
+
+---
+
+## 9. Verification and Test Criteria
+
+This section defines the technical test methods and pass/fail criteria that verify the functional requirements of PMC-FRS-001. Each test case (TC-*) maps to the FRS traceability matrix; the FRS states the observable acceptance criterion, this section states the method, setup and measurable pass criterion. Hardware-level checks (electrical, mechanical) are in PMC-HTD-001 §13.
+
+### 9.1 Display Subsystem — TC-DSP-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Inject known local times (00:00, 06:00, 12:00, 18:00, 23:59:59) via the debug time command | Each needle matches the expected position within ±1 scale division (≈ ±1 LSB of the 8-bit duty) | FR-DSP-001..003 |
+| 2 | Configure a non-zero UTC offset; read meters at a known UTC instant | Meters show local time, not UTC | FR-DSP-003a |
+| 3 | Sweep each channel 0→max in 16 steps; measure V_out at the RC filter node | V_out linear vs. duty (R² ≥ 0.999); ≈0 V at zero, ≈3.0 V at full scale | FR-DSP-004..006 |
+| 4 | Observe needles for 10 min against a 1PPS reference | Exactly one step per second; no visible flicker, glitch or overshoot | FR-DSP-007..009 |
+| 5 | Set per-meter calibration, power-cycle, re-read; then apply defaults reset | Calibration persists across power cycle; defaults place full scale below the end-stop | FR-DSP-010..014 |
+
+### 9.2 Boot and Time-Source Acquisition — TC-BOOT-001..004
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Power on with no network / GNSS / DCF77 | Display lives at 00:00:00 within ~2 s and advances at 1 Hz | FR-BOOT-001..004 |
+| 2 | Provide WiFi + NTP | Clock joins WiFi and corrects to NTP time; failures retried and shown on status | FR-BOOT-005..010 |
+| 3 | Provide a GNSS fix | Time switches to GNSS; tick follows the GNSS pulse | FR-BOOT-011..013 |
+| 4 | Remove the GNSS fix | Falls back to NTP/internal with no jump > 1 s | FR-BOOT-014..015 |
+| 5 | Enable DCF77 with only DCF77 available, then restore NTP/GNSS | DCF77 sets time; NTP/GNSS override cleanly; source changes logged | FR-BOOT-018..021 |
+| 6 | Force tick-source changes | Seconds never jump > 1 count; each change logged | FR-BOOT-016..017 |
+
+### 9.3 Timekeeping — TC-TIM-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Set a known UTC and a non-zero offset | Internal time is UTC; local display = UTC + offset/DST | FR-TIM-001..003 |
+| 2 | Drive ticks from GNSS pulse, internal, then DCF77 mark | Seconds advance correctly on each; gaps bridged smoothly | FR-TIM-004..007 |
+| 3 | Inject a large then a small error at re-sync | Large error stepped; small error corrected without a visible jump | FR-TIM-006 |
+| 4 | Present GNSS, NTP, DCF77 together, then remove in priority order | Highest-priority source governs at each stage | FR-TIM-008 |
+
+### 9.4 NTP Synchronisation — TC-NTP-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Configure a custom server; then clear it | Syncs via the configured server, and via the default when unset | FR-NTP-001..002 |
+| 2 | Wait past the re-sync interval | Re-syncs automatically on schedule | FR-NTP-003 |
+| 3 | Open the status page | NTP server, last sync, quality and next sync shown | FR-NTP-004 |
+
+### 9.5 GNSS — TC-GPS-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Toggle GNSS off/on; reboot | Setting persists; no GNSS activity when off | FR-GPS-001..002 |
+| 2 | Acquire a fix | Time, fix status and position obtained; pulse drives the tick | FR-GPS-003..004 |
+| 3 | Valid fix alongside NTP; then lose the fix | GNSS governs; lost fix falls back automatically | FR-GPS-005..007 |
+| 4 | Power-cycle after a fix | Last position retained as a hint; feeds DST | FR-GPS-008..009 |
+
+### 9.6 Daylight Saving — TC-DST-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Source location from GNSS, then IP geolocation, then DCF77 only (CET) | Timezone/DST resolved from the highest available source | FR-DST-001 |
+| 2 | Cross a CET↔CEST change with the network down | Local display shifts one hour at the right moment, smoothly, offline | FR-DST-002..003, FR-DST-006 |
+| 3 | Reconnect on the IP-geolocation source | Location refreshed on reconnect and daily | FR-DST-004 |
+| 4 | Open the status page | DST state, offset and source shown | FR-DST-005 |
+
+### 9.7 DCF77 — TC-DCF-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Toggle off/on; reboot; test both polarities | Off by default; setting persists; decodes with either polarity | FR-DCF-001..004 |
+| 2 | Feed a clean signal, then a corrupt one | Date/time + CET/CEST recovered; bad frames rejected; time used only after confirmation | FR-DCF-005..007 |
+| 3 | DCF77 only, then add NTP/GNSS | DCF77 sets UTC (correct CET/CEST offset); NTP/GNSS override it | FR-DCF-008..009 |
+| 4 | Interrupt reception; cross a CET↔CEST change | No display disturbance; UTC continuous across the change | FR-DCF-010..011 |
+| 5 | Remove the GNSS pulse with DCF77 present | Seconds tick follows the DCF77 mark; gaps fall back smoothly | FR-DCF-012 |
+
+### 9.8 Network and Discovery — TC-NW-001..002
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Provide valid credentials | Connects and gets an address automatically | FR-NW-001..002 |
+| 2 | Drop and restore WiFi | Reconnects on its own | FR-NW-003 |
+| 3 | Start with no joinable network | Open fallback AP appears after the timeout; full GUI works on it; closes on joining | FR-NW-005..009 |
+| 4 | From a LAN client | Resolves as `panelclock.local`; web service discoverable; not advertised in AP-only mode | FR-NW-010..013 |
+
+### 9.9 Web GUI — TC-WEB-001..006
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Load the GUI offline in a stock browser | All pages load from the device; nav works; no internet needed | FR-WEB-001..005 |
+| 2 | Use each config page (calibrate, WiFi, GNSS, DCF77) | Settings apply and persist; calibration live-preview works | FR-WEB-010..027, 050..053 |
+| 3 | Open the status page | All status fields present and auto-refresh | FR-WEB-030..035 |
+| 4 | Upload good and tampered firmware | Good installs and reboots; tampered rejected with a clear error, clock unchanged | FR-WEB-040..046 |
+
+### 9.10 Security / FOTA — TC-SEC-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Inspect device key handling | Only the public verification key is present; it survives updates | FR-SEC-001..003 |
+| 2 | Upload validly signed, unsigned, and altered packages | Only the valid one is accepted; others rejected before any write, with a logged reason | FR-SEC-004..006 |
+| 3 | Deliver a signed update carrying a new key | New key installs; later updates verified against it | FR-SEC-007 |
+
+### 9.11 Non-Functional — TC-NFR-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Measure tick-to-meter latency and page load | Meters update within ~10 ms; pages load in a few seconds; display unaffected by sync | NFR-PERF-001..003 |
+| 2 | Hang the firmware; corrupt stored settings | Auto-resets within ~30 s and reboots; corrupt settings reset to defaults and logged | NFR-REL-001..003 |
+| 3 | Power off / reset | Needles fall to zero promptly | NFR-PWR-001 |
+| 4 | Review configurability, logging and structure | Settings change at runtime without reflash; key events logged; drive layer isolated | NFR-MNT-001..002, NFR-PORT-001 |
+
+### 9.12 Real-Time Clock — TC-RTC-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Set a time (sync or encoder), remove main power briefly, re-boot | Clock resumes the correct time of day from the RTC | FR-RTC-001..002, FR-RTC-004 |
+| 2 | Sync via GNSS/NTP/DCF77, then cold-boot offline | Boot time matches the previously-synced time (RTC written back) | FR-RTC-003 |
+| 3 | Remove the backup battery, then boot | Time invalid → starts at 00:00:00; RTC indicator shows invalid | FR-RTC-005 |
+| 4 | Provide a higher source while on RTC time | Higher source overrides the RTC | FR-RTC-006 |
+
+### 9.13 Panel Indicators and Control — TC-UI-001
+
+| Step | Method / setup | Pass criterion | Verifies |
+|------|----------------|----------------|----------|
+| 1 | Drive each source to off / acquiring / valid | Each LED shows off / ≈1 Hz blink / steady accordingly; active source readable by priority | UI-IND-001..009 |
+| 2 | Remove the RTC backup battery and boot | RTC LED blinks (invalid) and the clock starts at 00:00:00 | UI-IND-006, FR-RTC-005 |
+| 3 | Long-press, rotate each field, short-press through H/M/S, confirm | Set mode entered; meters track edits; time written to the RTC and retained | UI-CTL-002..006, FR-RTC-004 |
+| 4 | Enter set mode and wait out the timeout | Returns to normal display with the time unchanged | UI-CTL-007 |
+
+---
+
+## 10. Design Constraints
+
+These constraints (moved from PMC-FRS-001) bound the implementation. Hardware specifics are detailed in PMC-HTD-001.
+
+| ID | Constraint |
+|----|------------|
+| DC-001 | Target is the WEMOS LOLIN S3 (ESP32-S3-WROOM-1-N16R8: 16 MB quad flash, 8 MB octal PSRAM); build with PlatformIO + Arduino on ESP-IDF 5.x; firmware runs on FreeRTOS (no bare-metal or alternative RTOS). |
+| DC-002 | The ESP32-S3 has no analogue DAC; all meter drive is produced by PWM + RC filtering via the LEDC peripheral. |
+| DC-003 | Each meter is modified so 3 V gives full-scale deflection; design point 0–3 V (duty 0–232); the 3.3 V GPIO maximum is not used as full scale (see PMC-HTD-001 §4.3). |
+| DC-004 | PWM is 8-bit (0–255) at 80 kHz from the 80 MHz LEDC clock — 256 discrete positions, no fractional duty. |
+| DC-005 | The flash partition table must include two OTA application partitions; it is a build-time configuration and cannot be changed by FOTA. |
+| DC-006 | The FOTA public key is embedded in the firmware binary at build time, excluded from OTA writes, and not modifiable at runtime. |
+| DC-007 | DCF77 reception is limited to Central Europe (≈ 2 000 km from Mainflingen) and depends on local signal strength; it is an optional, region-specific source the design shall not rely on. |
+| DC-008 | The DS1307Z RTC operates at 5 V; its I2C bus is level-shifted to the 3.3 V logic of the ESP32-S3, and it requires a 32.768 kHz crystal and a coin-cell backup (PMC-HTD-001 §8). |
+
+---
+
+## 11. External Interfaces
+
+Moved from PMC-FRS-001. Pin-level detail is in PMC-HTD-001 §3; protocol and peripheral detail is in the module designs (§5).
+
+### 11.1 Hardware Interfaces
+
+| ID | Interface |
+|----|-----------|
+| IC-HW-001 | Meter PWM outputs use the GPIO / LEDC channels and timers assigned in PMC-HTD-001 §3 and §5. |
+| IC-HW-002 | Each PWM channel has a dedicated RC low-pass filter (cutoff ≈ 16 Hz; PMC-HTD-001 §4.4). |
+| IC-HW-003 | GNSS 1PPS on GPIO 10 — input, no internal pull, rising-edge interrupt (PMC-HTD-001 §3). |
+| IC-HW-004 | GNSS UART on UART1 (RX GPIO 18, TX GPIO 21), default 9 600 baud, configurable (PMC-HTD-001 §6). |
+| IC-HW-005 | DCF77 time-code on GPIO 11 — interrupt-capable input with internal pull-up, polarity configurable (PMC-HTD-001 §7). |
+| IC-HW-006 | DCF77 enable (PON) on GPIO 12 — push-pull output; receiver held off when DCF77 disabled (PMC-HTD-001 §7). |
+| IC-HW-007 | DS1307Z RTC on I2C — SDA GPIO 8, SCL GPIO 9, address 0x68; 5 V part with the bus level-shifted to 3.3 V (PMC-HTD-001 §3, §8). |
+| IC-HW-008 | Four front-panel status LEDs (RTC/DCF/NTP/GNSS) on GPIO 4–7 — push-pull outputs with series resistors (PMC-HTD-001 §3). |
+| IC-HW-009 | Rotary encoder on GPIO 13 (A) / 14 (B) and push button on GPIO 47 — inputs with internal pull-ups, firmware debounced (PMC-HTD-001 §3). |
+
+### 11.2 Software and Protocol Interfaces
+
+| ID | Interface |
+|----|-----------|
+| IC-SW-001 | NTP per NTPv4 (RFC 5905), UDP port 123. |
+| IC-SW-002 | GNSS via NMEA 0183; at minimum `$GPRMC` / `$GNRMC` are parsed. |
+| IC-SW-003 | Web GUI over HTTP/1.1, TCP port 80 (HTTPS deferred — §8 TBD-003). |
+| IC-SW-004 | FOTA uses the ESP-IDF dual-slot OTA partition layout. |
+| IC-SW-005 | DCF77 decoded from the one-minute amplitude-modulated time-code frame (PTB DCF77 standard). |
+
+### 11.3 Human Interfaces
+
+| ID | Interface |
+|----|-----------|
+| IC-HMI-001 | Primary UI is the embedded web GUI (FR-WEB-*). |
+| IC-HMI-002 | Secondary diagnostic interface: serial debug stream at 115 200 baud, 8-N-1, on UART0 / USB-CDC. |
