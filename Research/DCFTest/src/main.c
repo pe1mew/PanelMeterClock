@@ -2,53 +2,49 @@
  * @file main.c
  * @brief DCF77 decoder proof of concept (PanelMeterClock Research/DCFTest).
  *
- * Wires the reusable dcf77 component (components/dcf77) to the serial
- * console: every classified second mark, minute mark, frame decode/reject
- * and time confirmation is printed while the decoder acquires; once the
- * time is confirmed (FR-DCF-007) a running clock line is printed on every
- * DCF77 second mark.
+ * Two interchangeable decoder components are available:
+ *
+ *   USE_PHASE_DECODER = 0 — components/dcf77: simple edge-timing decoder
+ *       (PMC-STD-001 §5.10 baseline, permissively licensed).
+ *   USE_PHASE_DECODER = 1 — components/dcf77p: phase-locked exhaustive
+ *       decoder, C port of Udo Klein's blinkenlight decoder. NOTE:
+ *       GPL-3.0 — linking it makes the firmware GPL.
+ *
+ * Either way the harness prints decoding progress over the default ESP-IDF
+ * console (UART0 → CH340 USB port) and, once the time is trusted, a running
+ * clock line every second.
  *
  * Pinning per PMC-HTD-001 §3: time-code GPIO 11, PON GPIO 12, DCF status
  * LED GPIO 5 (blinking = acquiring, steady = valid, per PMC-GUI-001).
- *
- * Output goes to the default ESP-IDF console (UART0 → CH340 USB port).
- *
- * The running-clock bookkeeping below stands in for what tick_task does in
- * the final firmware (PMC-STD-001 §4/§5.10): the dcf77 component only
- * decodes and reports; it owns no epoch.
  */
+
+#define USE_PHASE_DECODER 1
 
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
+
+#if USE_PHASE_DECODER
+#include "dcf77p.h"
+#else
 #include "dcf77.h"
+#endif
 
-#define LED_DCF_GPIO           GPIO_NUM_5 /* front-panel DCF status LED (PMC-HTD-001 §3) */
-#define LED_INTERVAL_MS        250        /* loop pace; LED toggles every 2nd pass (~1 Hz blink) */
-#define STATUS_INTERVAL_MS     10000      /* periodic status summary */
-#define PRINT_BITS_WHEN_LOCKED false      /* true: keep per-bit lines after time is confirmed */
+#define LED_DCF_GPIO       GPIO_NUM_5 /* front-panel DCF status LED (PMC-HTD-001 §3) */
+#define LED_INTERVAL_MS    250        /* loop pace; LED toggles every 2nd pass (~1 Hz blink) */
+#define STATUS_INTERVAL_MS 10000      /* periodic status summary */
 
-static dcf77_t           dcf;
 static SemaphoreHandle_t log_mutex; // groups multi-line prints from decoder and main task
-
-// Running clock, maintained from decoder events (decoder task context only).
-static int64_t utc_epoch  = -1;    // current UTC second; -1 = no confirmed time yet
-static bool    fresh_sync = false; // epoch was (re)set at the current minute mark
-static bool    show_cest  = false; // zone of the last valid frame, for display
-
-// Inverted-polarity detection: with the wrong polarity setting the decoder
-// "marks" are the ~800/900 ms idle phases.
-static uint32_t long_mark_count    = 0;
-static bool     polarity_hint_done = false;
 
 /** printf to the console; safe to call from multiple tasks. */
 static void log_print(const char *fmt, ...)
 {
-    char    buf[192];
+    char    buf[256];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
@@ -59,7 +55,7 @@ static void log_print(const char *fmt, ...)
 }
 
 // ---------------------------------------------------------------------------
-// Presentation helpers
+// Shared presentation helpers
 // ---------------------------------------------------------------------------
 
 typedef struct {
@@ -93,6 +89,174 @@ static const char *weekday_name(uint8_t wd)
     static const char *const names[] = {"?", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
     return names[wd <= 7 ? wd : 0];
 }
+
+#if USE_PHASE_DECODER
+// ===========================================================================
+// Harness for the phase-locked exhaustive decoder (components/dcf77p)
+// ===========================================================================
+
+static dcf77p_t dcfp;
+
+// One classification character per second of the current minute:
+// 'S' sync mark, '0'/'1' data bits, '?' undefined, '.' not (yet) received.
+static char tick_line[62];
+static bool tick_line_dirty = false;
+static int  unsynced_pos    = 0;
+
+static void tick_line_reset(void)
+{
+    memset(tick_line, '.', 61);
+    tick_line[61]   = '\0';
+    tick_line_dirty = false;
+    unsynced_pos    = 0;
+}
+
+static const char *state_name(dcf77p_state_t s)
+{
+    static const char *const names[] =
+        {"OFF", "ACQUIRING_PHASE", "ACQUIRING_SECOND", "DECODING", "TIME_VALID"};
+    return names[s];
+}
+
+/** "--" or two-digit value, for partially decoded fields. */
+static const char *fmt2(uint8_t v, char buf[4])
+{
+    if (v == 0xFF) {
+        return "--";
+    }
+    snprintf(buf, 4, "%02u", v);
+    return buf;
+}
+
+static void on_dcfp_event(const dcf77p_event_t *evt, void *ctx)
+{
+    (void)ctx;
+    static const char tick_char[4] = {'S', '?', '0', '1'};
+
+    switch (evt->type) {
+    case DCF77P_EVT_TICK:
+        if (evt->tick_second <= 60) {
+            tick_line[evt->tick_second] = tick_char[evt->tick];
+            tick_line_dirty             = true;
+        } else {
+            // no second lock yet: show the raw classification stream
+            tick_line[unsynced_pos++] = tick_char[evt->tick];
+            tick_line_dirty           = true;
+            if (unsynced_pos >= 60) {
+                tick_line[unsynced_pos] = '\0';
+                log_print("[tick] %s  (no second lock)\n", tick_line);
+                tick_line_reset();
+            }
+        }
+        break;
+
+    case DCF77P_EVT_SECOND: {
+        const dcf77p_time_t *t = &evt->time;
+
+        // flush the per-minute classification line at the minute boundary
+        if (t->second == 0 && tick_line_dirty && unsynced_pos == 0) {
+            log_print("[min ] %s\n", tick_line);
+            tick_line_reset();
+        }
+
+        if (t->valid) {
+            const civil_t u = civil_from_epoch(t->utc_epoch);
+            log_print("[time] %04u-%02u-%02u %s %02u:%02u:%02u %s (UTC %02d:%02d:%02d)%s%s\n",
+                      2000 + t->year2, t->month, t->day, weekday_name(t->weekday),
+                      t->hour, t->minute, t->second, t->cest ? "CEST" : "CET",
+                      u.hh, u.mm, u.ss,
+                      t->dst_change_announced ? " [DST change announced]" : "",
+                      t->leap_second_announced ? " [leap second announced]" : "");
+        } else if (t->second <= 60) {
+            // second lock exists; calendar fields still converging
+            char b1[4], b2[4], b3[4], b4[4], b5[4];
+            log_print("[dec ] %s:%s:%02u  date 20%s-%s-%s  (fields locking)\n",
+                      fmt2(t->hour, b1), fmt2(t->minute, b2), t->second,
+                      fmt2(t->year2, b3), fmt2(t->month, b4), fmt2(t->day, b5));
+        }
+        break;
+    }
+
+    case DCF77P_EVT_STATE_CHANGE:
+        log_print("==== state: %s -> %s ====\n",
+                  state_name(evt->old_state), state_name(evt->new_state));
+        if (evt->new_state == DCF77P_STATE_TIME_VALID) {
+            log_print("[time] full date/time determined by exhaustive decoding\n");
+        }
+        break;
+    }
+}
+
+static void decoder_setup(void)
+{
+    log_print("Decoder: dcf77p — phase-locked exhaustive (Udo Klein port, GPL-3.0)\n");
+    log_print("1 kHz sampling, 100 phase bins, per-field maximum-likelihood binning\n");
+    log_print("------------------------------------------------------------------\n");
+
+    tick_line_reset();
+
+    dcf77p_config_t cfg = dcf77p_config_default();
+    cfg.event_cb = on_dcfp_event;
+
+    if (!dcf77p_init(&dcfp, &cfg) || !dcf77p_start(&dcfp)) {
+        log_print("[dcf ] FATAL: decoder init/start failed\n");
+        return;
+    }
+    log_print("[dcf ] receiver powered, sampling — phase lock in ~1 min, full time in 3-10 min\n");
+}
+
+static void decoder_status_line(void)
+{
+    dcf77p_status_t st;
+    dcf77p_get_status(&dcfp, &st);
+    log_print("[stat] %s | sec %lu | ticks S:%lu ?:%lu 0:%lu 1:%lu | phase %lu-%lu | "
+              "sync %u-%u | min %u-%u hr %u-%u day %u-%u wd %u-%u mon %u-%u yr %u-%u | drop %lu\n",
+              state_name(st.state), (unsigned long)st.seconds,
+              (unsigned long)st.ticks[DCF77P_TICK_SYNC],
+              (unsigned long)st.ticks[DCF77P_TICK_UNDEFINED],
+              (unsigned long)st.ticks[DCF77P_TICK_ZERO],
+              (unsigned long)st.ticks[DCF77P_TICK_ONE],
+              (unsigned long)st.quality.phase_lock, (unsigned long)st.quality.phase_noise,
+              st.quality.second.lock, st.quality.second.noise,
+              st.quality.minute.lock, st.quality.minute.noise,
+              st.quality.hour.lock, st.quality.hour.noise,
+              st.quality.day.lock, st.quality.day.noise,
+              st.quality.weekday.lock, st.quality.weekday.noise,
+              st.quality.month.lock, st.quality.month.noise,
+              st.quality.year.lock, st.quality.year.noise,
+              (unsigned long)st.slots_dropped);
+}
+
+static bool decoder_led_steady(void)
+{
+    dcf77p_status_t st;
+    dcf77p_get_status(&dcfp, &st);
+    return st.state == DCF77P_STATE_TIME_VALID;
+}
+
+static bool decoder_led_off(void)
+{
+    dcf77p_status_t st;
+    dcf77p_get_status(&dcfp, &st);
+    return st.state == DCF77P_STATE_OFF;
+}
+
+#else  /* !USE_PHASE_DECODER */
+// ===========================================================================
+// Harness for the simple edge-timing decoder (components/dcf77)
+// ===========================================================================
+
+static dcf77_t dcf;
+
+// Running clock, maintained from decoder events (decoder task context only).
+static int64_t utc_epoch  = -1;    // current UTC second; -1 = no confirmed time yet
+static bool    fresh_sync = false; // epoch was (re)set at the current minute mark
+static bool    show_cest  = false; // zone of the last valid frame, for display
+
+// Inverted-polarity detection: with the wrong polarity setting the decoder
+// "marks" are the ~800/900 ms idle phases.
+static uint32_t long_mark_count    = 0;
+static bool     polarity_hint_done = false;
 
 /** Field annotation for the per-bit progress lines. */
 static const char *bit_label(int16_t idx)
@@ -134,10 +298,6 @@ static void format_frame_bits(const uint8_t *bits, uint8_t count, char *out, siz
     out[pos] = '\0';
 }
 
-// ---------------------------------------------------------------------------
-// Decoder callbacks (decoder task context)
-// ---------------------------------------------------------------------------
-
 static void on_dcf_event(const dcf77_event_t *evt, void *ctx)
 {
     (void)ctx;
@@ -150,15 +310,15 @@ static void on_dcf_event(const dcf77_event_t *evt, void *ctx)
         break;
 
     case DCF77_EVT_BIT:
-        if (st.state == DCF77_STATE_LOCKED && !PRINT_BITS_WHEN_LOCKED) {
-            break;
+        if (st.state == DCF77_STATE_LOCKED) {
+            break; // suppress per-bit lines once locked
         }
         if (evt->bit_index >= 0) {
             log_print("[bit ] %2d = %d  (%3u ms)  %s\n",
-                 evt->bit_index, evt->bit_value, evt->measured_ms, bit_label(evt->bit_index));
+                      evt->bit_index, evt->bit_value, evt->measured_ms, bit_label(evt->bit_index));
         } else {
             log_print("[bit ]  ? = %d  (%3u ms)  waiting for minute mark\n",
-                 evt->bit_value, evt->measured_ms);
+                      evt->bit_value, evt->measured_ms);
         }
         break;
 
@@ -168,7 +328,7 @@ static void on_dcf_event(const dcf77_event_t *evt, void *ctx)
             if (++long_mark_count >= 5) {
                 polarity_hint_done = true;
                 log_print("[hint] marks of ~800/900 ms suggest an inverted signal — "
-                     "set cfg.signal_inverted = true in app_main()\n");
+                          "set cfg.signal_inverted = true in app_main()\n");
             }
         }
         break;
@@ -188,11 +348,11 @@ static void on_dcf_event(const dcf77_event_t *evt, void *ctx)
         const civil_t       u = civil_from_epoch(t->utc_epoch);
         log_print("[frame] %s\n", bitstr);
         log_print("[frame] OK: %s %04u-%02u-%02u %02u:%02u:00 %s = %02d:%02d UTC%s%s%s\n",
-             weekday_name(t->weekday), t->year, t->month, t->day, t->hour, t->minute,
-             t->cest ? "CEST" : "CET", u.hh, u.mm,
-             t->dst_change_announced ? " [DST change announced]" : "",
-             t->leap_second_announced ? " [leap second announced]" : "",
-             t->call_bit ? " [call bit]" : "");
+                  weekday_name(t->weekday), t->year, t->month, t->day, t->hour, t->minute,
+                  t->cest ? "CEST" : "CET", u.hh, u.mm,
+                  t->dst_change_announced ? " [DST change announced]" : "",
+                  t->leap_second_announced ? " [leap second announced]" : "",
+                  t->call_bit ? " [call bit]" : "");
         show_cest = t->cest;
         if (!st.time_valid) {
             log_print("[frame] awaiting confirmation by the next frame (FR-DCF-007)\n");
@@ -238,9 +398,56 @@ static void on_dcf_tick(int64_t t_us, int16_t second, void *ctx)
     const civil_t l = civil_from_epoch(utc_epoch + (show_cest ? 2 : 1) * 3600);
     const civil_t u = civil_from_epoch(utc_epoch);
     log_print("[time] %04d-%02d-%02d %02d:%02d:%02d %s (UTC %02d:%02d:%02d)\n",
-         l.y, l.m, l.d, l.hh, l.mm, l.ss, show_cest ? "CEST" : "CET",
-         u.hh, u.mm, u.ss);
+              l.y, l.m, l.d, l.hh, l.mm, l.ss, show_cest ? "CEST" : "CET",
+              u.hh, u.mm, u.ss);
 }
+
+static void decoder_setup(void)
+{
+    log_print("Decoder: dcf77 — simple edge-timing (PMC-STD-001 #5.10 baseline)\n");
+    log_print("------------------------------------------------------------------\n");
+
+    dcf77_config_t cfg = dcf77_config_default();
+    cfg.event_cb = on_dcf_event;
+    cfg.tick_cb  = on_dcf_tick;
+
+    if (!dcf77_init(&dcf, &cfg) || !dcf77_start(&dcf)) {
+        log_print("[dcf ] FATAL: decoder init/start failed\n");
+        return;
+    }
+    log_print("[dcf ] receiver powered, decoding — a confirmed time takes 2-5 minutes\n");
+}
+
+static void decoder_status_line(void)
+{
+    dcf77_status_t st;
+    dcf77_get_status(&dcf, &st);
+    static const char *const state_names[] =
+        {"OFF", "NO_SIGNAL", "SYNCING", "COLLECTING", "LOCKED"};
+    log_print("[stat] %s | second %d | edges %lu (%lu glitches) | bits %lu ok / %lu bad | "
+              "frames %lu ok / %lu bad | confirmed %lu\n",
+              state_names[st.state], st.second,
+              (unsigned long)st.edges, (unsigned long)st.glitches,
+              (unsigned long)st.bits_ok, (unsigned long)st.pulses_rejected,
+              (unsigned long)st.frames_ok, (unsigned long)st.frames_rejected,
+              (unsigned long)st.confirmations);
+}
+
+static bool decoder_led_steady(void)
+{
+    dcf77_status_t st;
+    dcf77_get_status(&dcf, &st);
+    return st.state == DCF77_STATE_LOCKED;
+}
+
+static bool decoder_led_off(void)
+{
+    dcf77_status_t st;
+    dcf77_get_status(&dcf, &st);
+    return st.state == DCF77_STATE_OFF;
+}
+
+#endif /* USE_PHASE_DECODER */
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -263,31 +470,18 @@ void app_main(void)
     log_print("\n");
     log_print("DCF77 decoder proof of concept — PanelMeterClock Research/DCFTest\n");
     log_print("Time-code GPIO 11 (input, pull-up) | PON GPIO 12 (low = on) | DCF LED GPIO 5\n");
-    log_print("Polarity: mark = HIGH; flip cfg.signal_inverted if hinted below (FR-DCF-004)\n");
+    log_print("Polarity: mark = HIGH; set cfg.signal_inverted for inverted modules (FR-DCF-004)\n");
     log_print("Decoder task: core 0, priority 7 (PMC-STD-001 #4)\n");
-    log_print("------------------------------------------------------------------\n");
+    decoder_setup();
 
-    dcf77_config_t cfg = dcf77_config_default();
-    cfg.event_cb = on_dcf_event;
-    cfg.tick_cb  = on_dcf_tick;
-
-    if (!dcf77_init(&dcf, &cfg) || !dcf77_start(&dcf)) {
-        log_print("[dcf ] FATAL: decoder init/start failed\n");
-        return;
-    }
-    log_print("[dcf ] receiver powered, decoding — a confirmed time takes 2-5 minutes\n");
-
-    // LED + periodic status, formerly the Arduino loop()
+    // LED + periodic status
     uint32_t iter   = 0;
     bool     led_on = false;
     for (;;) {
-        dcf77_status_t st;
-        dcf77_get_status(&dcf, &st);
-
         // DCF LED per PMC-GUI-001: blink ~1 Hz while acquiring, steady when valid.
-        if (st.state == DCF77_STATE_LOCKED) {
+        if (decoder_led_steady()) {
             led_on = true;
-        } else if (st.state == DCF77_STATE_OFF) {
+        } else if (decoder_led_off()) {
             led_on = false;
         } else if (iter % 2 == 0) {
             led_on = !led_on;
@@ -295,15 +489,7 @@ void app_main(void)
         gpio_set_level(LED_DCF_GPIO, led_on ? 1 : 0);
 
         if (iter > 0 && iter % (STATUS_INTERVAL_MS / LED_INTERVAL_MS) == 0) {
-            static const char *const state_names[] =
-                {"OFF", "NO_SIGNAL", "SYNCING", "COLLECTING", "LOCKED"};
-            log_print("[stat] %s | second %d | edges %lu (%lu glitches) | bits %lu ok / %lu bad | "
-                 "frames %lu ok / %lu bad | confirmed %lu\n",
-                 state_names[st.state], st.second,
-                 (unsigned long)st.edges, (unsigned long)st.glitches,
-                 (unsigned long)st.bits_ok, (unsigned long)st.pulses_rejected,
-                 (unsigned long)st.frames_ok, (unsigned long)st.frames_rejected,
-                 (unsigned long)st.confirmations);
+            decoder_status_line();
         }
 
         iter++;

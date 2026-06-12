@@ -1,3 +1,3 @@
 idf_component_register(SRCS "main.c"
                        INCLUDE_DIRS "."
-                       PRIV_REQUIRES dcf77 driver)
+                       PRIV_REQUIRES dcf77 dcf77p driver)

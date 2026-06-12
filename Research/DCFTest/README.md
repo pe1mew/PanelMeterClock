@@ -5,27 +5,65 @@ demodulated 77.5 kHz time-code signal, decode and validate the one-minute
 frame, and report civil CET/CEST time plus derived UTC over the serial
 console.
 
-An **ESP-IDF** project (no Arduino layer). The decoder is packaged as a
-self-contained IDF component, the RTOS-aware module that PMC-STD-001 §5.10
-specifies for the firmware (`dcf77_task`: simple edge-timing decoder, no
-external library). `src/main.c` is only the PoC harness: it wires the
-module's callbacks to console printing and stands in for `tick_task`'s
-epoch bookkeeping.
+An **ESP-IDF** project (no Arduino layer) with **two interchangeable
+decoder components**, both RTOS-aware (dedicated FreeRTOS task, core 0,
+priority 7 per PMC-STD-001 §4) with the same callback-driven shape:
+
+* `components/dcf77` — **simple edge-timing decoder**, the PMC-STD-001
+  §5.10 baseline. Edge interrupt → pulse-width windows → frame validation →
+  consecutive-frame confirmation. Original code, no license constraints.
+* `components/dcf77p` — **phase-locked exhaustive decoder**, a C port of
+  Udo Klein's blinkenlight decoder (www.blinkenlight.net). 1 kHz sampling →
+  100-bin phase convolution → per-second tick classification → 60-bin
+  sync-mark scoring → per-field maximum-likelihood (Hamming) binning with
+  prediction-driven bin rings. Decodes through noise where individual
+  pulses are unreadable. **GPL-3.0** (see below).
+
+`src/main.c` is only the PoC harness: it wires the selected decoder's
+callbacks to console printing and stands in for `tick_task`'s epoch
+bookkeeping.
 
 ```
 DCFTest/
 ├── platformio.ini            framework = espidf, board = lolin_s3
 ├── CMakeLists.txt            standard IDF project stub
-├── sdkconfig.defaults        CONFIG_FREERTOS_HZ=1000
+├── sdkconfig.defaults        FREERTOS_HZ=1000, 16 MB flash
 ├── components/
-│   └── dcf77/                ← the reusable decoder component
-│       ├── CMakeLists.txt    (PRIV_REQUIRES driver esp_timer)
-│       ├── include/dcf77.h
-│       └── dcf77.c
+│   ├── dcf77/                ← edge-timing decoder component
+│   │   ├── CMakeLists.txt
+│   │   ├── include/dcf77.h
+│   │   └── dcf77.c
+│   └── dcf77p/               ← phase-locked exhaustive decoder component
+│       ├── CMakeLists.txt
+│       ├── LICENSE           GPL-3.0 (full text)
+│       ├── include/dcf77p.h
+│       └── dcf77p.c
 └── src/
-    ├── CMakeLists.txt        (PRIV_REQUIRES dcf77 driver)
+    ├── CMakeLists.txt        (PRIV_REQUIRES dcf77 dcf77p driver)
     └── main.c                PoC harness: app_main(), printing, LED
 ```
+
+## Choosing the decoder
+
+`src/main.c`, first line after the header comment:
+
+```c
+#define USE_PHASE_DECODER 1   // 1 = dcf77p (Klein port), 0 = dcf77 (edge timing)
+```
+
+**License consequence:** `dcf77p` is a derivative of GPL-3.0 code, with the
+full text in `components/dcf77p/LICENSE`. Any firmware image that links
+`dcf77p` must be distributed under GPL-3.0 terms. The `dcf77` component
+carries no such obligation — with `USE_PHASE_DECODER 0` the component is
+still compiled but not linked into the image. This was an accepted
+trade-off for this research (FDS/TDS deliberately unchanged; the STD still
+specifies the simple decoder for the firmware).
+
+Port deviations from the reference sketch
+(`Documentation/src/blinkenLightDC77DecoderAll.c`) are documented in
+`dcf77p.c`: the year-decoder bit-56 weight bug is fixed, the unused
+200-line signal predictor is replaced by its one-line leap-second closed
+form, and the AVR busy-wait output is replaced by task-context callbacks.
 
 ## Hardware
 
@@ -94,7 +132,32 @@ DCF77 decoder proof of concept — PanelMeterClock Research/DCFTest
 A first confirmed time takes 2–5 minutes with decent reception: partial
 first minute → one full frame → confirmation by the next frame.
 
-## How it works
+With the phase-locked decoder (`USE_PHASE_DECODER 1`) the output instead
+shows the acquisition stages and per-minute tick classifications:
+
+```
+Decoder: dcf77p — phase-locked exhaustive (Udo Klein port, GPL-3.0)
+...
+==== state: OFF -> ACQUIRING_PHASE ====
+[stat] ACQUIRING_PHASE | sec 0 | ticks S:0 ?:0 0:0 1:0 | phase 64-58 | ...
+==== state: ACQUIRING_PHASE -> ACQUIRING_SECOND ====
+[tick] 0100110100101S01101011000010100010010101011000110010010S010  (no second lock)
+==== state: ACQUIRING_SECOND -> DECODING ====
+[dec ] --:--:23  date 20----    (fields locking)
+[dec ] --:36:24  date 2026-06-12  (fields locking)
+[min ] 00011101001101000101101011000010100010010101011000110010010
+==== state: DECODING -> TIME_VALID ====
+[time] full date/time determined by exhaustive decoding
+[time] 2026-06-12 Fri 14:36:31 CEST (UTC 12:36:31)
+[time] 2026-06-12 Fri 14:36:32 CEST (UTC 12:36:32)
+```
+
+With good signal the phase lock arrives within ~1 minute and the full time
+typically within 3–6 minutes; with poor signal the exhaustive decoder keeps
+integrating and can take tens of minutes — but it converges at noise levels
+where the edge-timing decoder never produces a clean frame at all.
+
+## How it works — dcf77 (edge timing)
 
 ```
 GPIO 11 CHANGE ISR ──(timestamped edges)──▶ FreeRTOS queue ──▶ dcf77 task
@@ -120,6 +183,39 @@ GPIO 11 CHANGE ISR ──(timestamped edges)──▶ FreeRTOS queue ──▶ d
 * **Ticks (FR-DCF-012)** — every accepted mark leading edge fires a tick
   callback; in the firmware this feeds `tick_task` as the Priority-2 tick
   source.
+
+## How it works — dcf77p (phase-locked exhaustive)
+
+```
+1 kHz esp_timer cb ──(10 ms majority bits)──▶ FreeRTOS queue ──▶ dcf77p task
+(sampling only)                                                 (core 0, prio 7)
+```
+
+* **Phase lock** — each 10 ms slot feeds a saturating up/down counter in
+  one of 100 phase bins (cap 300 ≈ 5 min of integration). A sliding
+  convolution with the expected pulse shape (2× weight first 100 ms, 1×
+  second 100 ms) finds the second boundary; the same kernel 200 ms out of
+  phase estimates the noise floor. No edges are ever measured.
+* **Tick classification** — the 220 ms window after each boundary is split
+  into two 110 ms halves; their majorities yield sync-mark / 0 / 1 /
+  undefined per second.
+* **Second lock** — a 60-bin scoring scheme (+6 for a sync mark, ±1/−2
+  cross-evidence from 0/1 bits, exploiting "bit 0 = 0, bit 20 = 1") finds
+  which second of the minute we are in.
+* **Exhaustive field decoding** — every minute, each calendar field scores
+  *all* its candidate values (60 minutes, 24 hours, 31 days, …) by Hamming
+  distance against the received bits (parity included for minute/hour);
+  evidence accumulates per candidate in rings that the predicted time keeps
+  rotating in lock-step (timezone jumps and month lengths handled by the
+  prediction). The best candidate wins once it leads the runner-up by ≥ 2 —
+  effectively a maximum-likelihood decoder integrating over minutes.
+* **Output** — at every predicted second boundary the controller advances
+  the reconstructed time and publishes it (`DCF77P_EVT_SECOND` + tick
+  callback, FR-DCF-012); `valid` is set once all fields are determined and
+  mutually plausible, and the UTC epoch is derived from the zone bits
+  (FR-DCF-009). Trust is structural here: a field value only emerges after
+  consistent evidence across minutes, which subsumes the two-frame
+  confirmation idea of FR-DCF-007.
 
 ## Polarity (FR-DCF-004)
 
@@ -163,9 +259,15 @@ in `app_main()`.
   `DCF77_SIGNAL_LOST_TIMEOUT_S` = 300 (FR-DCF-010).
 * A leap-second minute (60 marks) is rejected as a 60-bit frame — one bad
   minute, then normal recovery.
-* The simple edge-timing decoder needs a reasonably clean signal. If
-  reception at the installation site turns out marginal, the upgrade path is
-  Udo Klein's phase-locked exhaustive decoder
-  (`Documentation/src/blinkenLightDC77DecoderAll.c`,
-  https://github.com/udoklein/dcf77), which this PoC's bit layout and tick
-  classification are based on.
+* The simple edge-timing decoder needs a reasonably clean signal; for
+  marginal sites the phase-locked `dcf77p` component is the implemented
+  alternative (`USE_PHASE_DECODER 1`, GPL-3.0).
+* `dcf77p` ports the decoder stages of Klein's sketch but not the later
+  library's local-clock flywheel or crystal frequency tuning — during deep
+  fades the published seconds keep ticking from the phase prediction, but
+  long outages degrade the locks rather than free-running on a disciplined
+  local oscillator.
+* `dcf77p` samples via a 1 kHz `esp_timer` callback (task-dispatched). That
+  is jitter-tolerant by design (10 ms bins, minutes of integration), but a
+  heavily loaded system could still starve it; the firmware-grade upgrade
+  is a GPTimer ISR feeding the same queue.
