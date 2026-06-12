@@ -112,7 +112,7 @@ The ESP32-S3 supports hardware secure boot: the bootloader verifies a signature 
 
 ## 5. Recommendation
 
-The two-file detached signature approach specified in PMC-FRS-001 (FR-SEC-002) and PMC-STD-001 (§5.8) is appropriate for this project: it is simple to implement with standard ESP-IDF APIs, requires no additional RAM budget, and the signing toolchain is minimal (`openssl dgst -sign`).
+The two-file detached signature approach specified in PMC-STD-001 (§5.8) — the implementation of the firmware-authenticity requirements in PMC-FRS-001 §13 (FR-SEC-001..006) — is appropriate for this project: it is simple to implement with standard ESP-IDF APIs, requires no additional RAM budget, and the signing toolchain is minimal (`openssl dgst -sign`).
 
 If a single-file workflow is preferred, **appended signature** is the lowest-effort change: adjust the OTA handler to split the incoming stream at `Content-Length − 64`. The verification logic is identical; only the file packaging and stream-splitting change.
 

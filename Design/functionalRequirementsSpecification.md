@@ -63,7 +63,7 @@ This document defines the functional and non-functional requirements for the Pan
 - Mechanical enclosure and panel meter face design
 - NTP server infrastructure
 - GNSS hardware procurement and wiring
-- HTTPS implementation (deferred; see Appendix F)
+- HTTPS (out of scope; the web GUI is HTTP/1.1 only)
 
 ### 2.3 Intended Audience
 
@@ -74,7 +74,7 @@ This document defines the functional and non-functional requirements for the Pan
 
 ### 2.4 How to Read This Document
 
-Sections 6 through 15 contain numbered requirements in the form `<Type>-<Domain>-<NNN>` (see Section 3 for the numbering scheme). Each requirement is atomic and is paired with an **Acceptance / Verification Criteria** entry that defines, in observable terms, how the requirement is confirmed in testing. The corresponding test methods and pass conditions are held in the Technical Design (PMC-STD-001 §9 and PMC-HTD-001). Technical implementation decisions — pin assignments, components, protocols, algorithms, libraries — are specified in the Technical Design, not here.
+Sections 6 through 15 contain numbered requirements in the form `<Type>-<Domain>-<NNN>` (see Section 3 for the numbering scheme). Each requirement is atomic and is paired with an **Acceptance / Verification Criteria** entry that defines, in observable terms, how the requirement is confirmed in testing. The corresponding test methods and pass conditions are held in the Technical Design (PMC-STD-001 §8 and PMC-HTD-001). Technical implementation decisions — pin assignments, components, protocols, algorithms, libraries — are specified in the Technical Design, not here.
 
 Section 5 provides a system-level overview with priority hierarchies. Appendix B contains a complete boot-phase state-transition table. Appendix F tracks all open issues and TBD items.
 
@@ -91,7 +91,7 @@ Section 5 provides a system-level overview with priority hierarchies. Appendix B
 | DST | Daylight Saving Time — the seasonal clock adjustment applied in many jurisdictions |
 | Duty cycle | The fraction of one PWM period during which the output signal is high, expressed as an 8-bit integer (0 = 0 %, 255 = 100 %) |
 | FOTA | Firmware Over The Air — uploading and applying new firmware via the embedded web GUI without physical access |
-| FreeRTOS | Real-time operating system layer provided by ESP-IDF / the Arduino core for the ESP32 |
+| FreeRTOS | Real-time operating system layer provided by ESP-IDF for the ESP32 |
 | FSD | Full-Scale Deflection — the maximum needle position on a panel meter, corresponding to the maximum rated input |
 | GNSS | Global Navigation Satellite System (encompasses GPS, GLONASS, Galileo, BeiDou, etc.) |
 | IP geolocation | Inferring geographic location (latitude / longitude / timezone) from a device's public IP address by querying an external web service |
@@ -118,8 +118,6 @@ Section 5 provides a system-level overview with priority hierarchies. Appendix B
 |----------|----------|
 | ESP32-S3-WROOM-1 Datasheet | `Documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf` |
 | ESP32-S3 Technical Reference Manual | `Documentation/esp32-s3_technical_reference_manual_en.pdf` |
-| WEMOS LOLIN S3 Schematic | `Documentation/sch_s3_v1.0.0.pdf` |
-| WEMOS LOLIN S3 Dimensions | `Documentation/dim_s3_v1.0.0.pdf` |
 | Siemens 1604P Panel Meter (DC 10.00 GF024T005) | `Documentation/` — Siemens product documentation |
 | Quectel L76-M33 GNSS Module | `Documentation/` — Quectel L76-M33 Hardware Design Guide and Product Specification |
 | DCF77 Receiver Module | `Documentation/` — DCF77 longwave (77.5 kHz) receiver module; ferrite antenna, demodulated time-code output |
@@ -142,6 +140,7 @@ Section 5 provides a system-level overview with priority hierarchies. Appendix B
 | Hardware Technical Design | `Design/hardwareTechnicalDesign.md` |
 | Software Technical Design | `Design/softwareTechnicalDesign.md` |
 | GUI / User Interface Specification | `Design/guiSpecification.md` |
+| FOTA Signature Considerations | `Design/signatureConciderations.md` |
 | PWM Driver Design and API | `Research/PWMDriver.md` |
 | PWM + RC Filter Verification Plan | `Research/PWMTest.md` |
 | Design Trade-off Notes | `Design/notes.md` |
@@ -711,7 +710,7 @@ The DCF77 subsystem provides an offline radio time reference derived from the Ge
 | FR-SEC-001..007 | FOTA security | TC-SEC-001 | |
 | NFR-* | Non-functional | TC-NFR-001 | Performance, watchdog |
 
-*Each requirement's acceptance criterion is stated inline in Sections 6–15. The corresponding test methods and pass conditions (test cases TC-*) are specified in PMC-STD-001 §9 (Verification and Test Criteria) and PMC-HTD-001.*
+*Each requirement's acceptance criterion is stated inline in Sections 6–15. The corresponding test methods and pass conditions (test cases TC-*) are specified in PMC-STD-001 §8 (Verification and Test Criteria) and PMC-HTD-001.*
 
 ---
 
@@ -741,14 +740,4 @@ Moved to **PMC-STD-001 Software Technical Design, Section 6**.
 
 ### Appendix F — Open Issues and TBDs
 
-| ID | Item | Status | Resolution |
-|----|------|--------|------------|
-| TBD-001 | GNSS 1PPS input GPIO pin number | ✅ Resolved | GPIO 10 — see PMC-STD-001 §5.6, §7 |
-| TBD-002 | GNSS UART peripheral number and baud rate | ✅ Resolved | UART1 (Serial1), RX GPIO 18, TX GPIO 21, default 9600 baud (configurable via NVS) — see PMC-STD-001 §5.6, §6, §7 |
-| TBD-003 | HTTPS support (IC-SW-003 deferred) — evaluate flash space after initial build | Open | v1.1 milestone — see PMC-STD-001 §8 TBD-003 |
-| TBD-004 | Ed25519 vs RSA-2048 for FOTA signing — confirm mbedTLS support and binary size impact on target | Open | Before FR-SEC implementation — see PMC-STD-001 §8 TBD-004 |
-| TBD-005 | IP geolocation service URL and API format | ✅ Resolved | ip-api.com (primary), worldtimeapi.org (fallback) — see PMC-STD-001 §5.7, §7 |
-| TBD-006 | Timezone rules library | ✅ Resolved | Custom POSIX TZ string parser; rule stored in NVS key `clock/posix_tz` — see PMC-STD-001 §5.7, §6, §7 |
-| TBD-007 | HTTP server library | ✅ Resolved | ESPAsyncWebServer + AsyncTCP — see PMC-STD-001 §3.1, §5.8 |
-| TBD-008 | DCF77 time-code input GPIO pin | ✅ Resolved | GPIO 11 — interrupt-capable, internal pull-up; see PMC-STD-001 §7, PMC-HTD-001 §3, §7 |
-| TBD-009 | DCF77 receiver enable (PON) GPIO pin | ✅ Resolved | GPIO 12 — push-pull output; see PMC-STD-001 §7, PMC-HTD-001 §3, §7 |
+All technical issues are resolved or closed; the decisions are recorded in the Technical Design (PMC-STD-001, PMC-HTD-001).

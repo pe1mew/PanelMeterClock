@@ -35,22 +35,21 @@
 
 ## 2. Target Hardware Platform
 
-### 2.1 Microcontroller Module — WEMOS LOLIN S3
+### 2.1 Microcontroller Module — ESP32-S3-WROOM-1-N16R8
 
 | Attribute | Value |
 |-----------|-------|
-| Module | WEMOS LOLIN S3 |
-| SoC / module | ESP32-S3-WROOM-1-N16R8 |
+| Module | Espressif ESP32-S3-WROOM-1-N16R8 |
 | CPU | Xtensa LX7 dual-core, up to 240 MHz |
 | Flash | 16 MB quad SPI (N16) |
 | PSRAM | 8 MB octal SPI (R8) |
 | SRAM | 512 KB |
 | WiFi | 802.11b/g/n 2.4 GHz |
 | GPIO voltage | 3.3 V (not 5 V-tolerant) |
-| USB | Native USB via USB-CDC (GPIO 19/20) + CH340 chip on UART0 |
+| USB | Module native USB (USB-CDC / USB-Serial-JTAG) on GPIO 19/20; the project PCB provides USB-C and the debug UART (HW-010) |
 | Operating supply | 3.3 V or 5 V via USB |
 
-### 2.2 Available GPIO on LOLIN S3
+### 2.2 Available GPIO on the ESP32-S3-WROOM-1
 
 The table below lists all GPIO pins available for application use after reserving the fixed-function pins.
 
@@ -80,20 +79,20 @@ All application GPIO assignments are listed below. This table is the single auth
 | 5 | LED — DCF status | Output | GPIO | Front-panel status LED (series R) | IC-HW-008, PMC-GUI-001 |
 | 6 | LED — NTP status | Output | GPIO | Front-panel status LED (series R) | IC-HW-008, PMC-GUI-001 |
 | 7 | LED — GNSS status | Output | GPIO | Front-panel status LED (series R) | IC-HW-008, PMC-GUI-001 |
-| 8 | I2C SDA | I/O | I2C | DS1307 RTC (via 3.3 V↔5 V level shifter) | IC-HW-007, TBD-010 |
-| 9 | I2C SCL | Output | I2C | DS1307 RTC (via 3.3 V↔5 V level shifter) | IC-HW-007, TBD-010 |
-| 10 | GNSS 1PPS | Input | GPIO interrupt | GNSS module 1PPS output | IC-HW-003, TBD-001 |
-| 11 | DCF77 time-code | Input | GPIO interrupt | DCF77 receiver time-code output | IC-HW-005, TBD-008 |
-| 12 | DCF77 enable (PON) | Output | GPIO | DCF77 receiver enable input | IC-HW-006, TBD-009 |
+| 8 | I2C SDA | I/O | I2C | DS1307 RTC (via 3.3 V↔5 V level shifter) | IC-HW-007 |
+| 9 | I2C SCL | Output | I2C | DS1307 RTC (via 3.3 V↔5 V level shifter) | IC-HW-007 |
+| 10 | GNSS 1PPS | Input | GPIO interrupt | GNSS module 1PPS output | IC-HW-003 |
+| 11 | DCF77 time-code | Input | GPIO interrupt | DCF77 receiver time-code output | IC-HW-005 |
+| 12 | DCF77 enable (PON) | Output | GPIO | DCF77 receiver enable input | IC-HW-006 |
 | 13 | Encoder A | Input | GPIO interrupt | Rotary encoder channel A (pull-up) | IC-HW-009, PMC-GUI-001 |
 | 14 | Encoder B | Input | GPIO interrupt | Rotary encoder channel B (pull-up) | IC-HW-009, PMC-GUI-001 |
 | 15 | PWM Hours | Output | LEDC_CHANNEL_0 / LEDC_TIMER_0 | RC filter → Hours meter | IC-HW-001 |
 | 16 | PWM Minutes | Output | LEDC_CHANNEL_1 / LEDC_TIMER_1 | RC filter → Minutes meter | IC-HW-001 |
 | 17 | PWM Seconds | Output | LEDC_CHANNEL_2 / LEDC_TIMER_2 | RC filter → Seconds meter | IC-HW-001 |
-| 18 | GNSS UART RX | Input | UART1 (Serial1) | GNSS module TX | IC-HW-004, TBD-002 |
+| 18 | GNSS UART RX | Input | UART1 | GNSS module TX | IC-HW-004 |
 | 19 | USB D− | — | USB-CDC / UART0 | USB connector | Fixed |
 | 20 | USB D+ | — | USB-CDC / UART0 | USB connector | Fixed |
-| 21 | GNSS UART TX | Output | UART1 (Serial1) | GNSS module RX | IC-HW-004, TBD-002 |
+| 21 | GNSS UART TX | Output | UART1 | GNSS module RX | IC-HW-004 |
 | 43 | Debug TX | Output | UART0 / CH340 | USB-serial chip | Fixed |
 | 44 | Debug RX | Input | UART0 / CH340 | USB-serial chip | Fixed |
 | 47 | Encoder button | Input | GPIO interrupt | Encoder push button (pull-up) | IC-HW-009, PMC-GUI-001 |
@@ -280,13 +279,13 @@ The L76-M33 operates natively at 3.3 V. All UART and 1PPS signals are directly c
 
 | Parameter | Value | Configurable |
 |-----------|-------|-------------|
-| Peripheral | UART1 (`Serial1`) | No |
+| Peripheral | UART1 | No |
 | RX GPIO | 18 | No |
 | TX GPIO | 21 | No |
 | Baud rate | 9 600 (default) | Yes — NVS key `clock/gnss_baud`; change applied via PMTK set-baud command then firmware reconnect |
 | Frame format | 8-N-1 | No |
 
-At 9 600 baud a complete `$GPRMC` sentence (≈ 70 bytes) arrives in ≈ 73 ms, well within the 1-second tick budget. To change the baud rate at runtime the firmware sends `$PMTK251,<baud>*<checksum><CR><LF>` before reopening `Serial1` at the new rate.
+At 9 600 baud a complete `$GPRMC` sentence (≈ 70 bytes) arrives in ≈ 73 ms, well within the 1-second tick budget. To change the baud rate at runtime the firmware sends `$PMTK251,<baud>*<checksum><CR><LF>` before reopening UART1 at the new rate.
 
 ### 6.4 1PPS Signal
 
@@ -379,7 +378,7 @@ The ferrite-rod antenna should be mounted away from switching-noise sources (the
 
 The DS1307 requires a 5 V supply, and its logic-high threshold (V_IH ≈ 0.7 × VCC ≈ 3.5 V) is above the ESP32-S3's 3.3 V output. The I2C bus is therefore routed through a **bidirectional MOSFET level shifter** (3.3 V on the ESP32 side, 5 V on the DS1307 side) with pull-ups on each side. The ESP32-S3 is not 5 V tolerant, so the DS1307 I2C lines must not connect to it directly.
 
-*(A 3.3 V RTC such as the DS3231 would remove the level shifter and improve accuracy; the DS1307Z is the selected part — see PMC-STD-001 §8 TBD-010.)*
+*(A 3.3 V RTC such as the DS3231 would remove the level shifter and improve accuracy; the DS1307Z is the selected part — see PMC-STD-001 §5.11.)*
 
 ### 8.3 Backup Battery
 
@@ -392,13 +391,13 @@ A CR2032 coin cell on VBAT keeps the DS1307 running while main power is off, so 
 | Parameter | Value |
 |-----------|-------|
 | Interface | UART0, also exposed via CH340 USB-serial chip |
-| USB connector | USB-C on LOLIN S3 board |
+| USB connector | USB-C on the project PCB |
 | Baud rate | 115 200 baud, 8-N-1 |
 | GPIO (UART0 TX) | 43 |
 | GPIO (UART0 RX) | 44 |
-| Arduino object | `Serial0` (not `Serial` — see PMC-STD-001, serial UART mapping note) |
+| ESP-IDF console | `esp_log` / `ESP_LOGx` on UART0 |
 
-`Serial` in the ESP32-S3 Arduino core defaults to the native USB-CDC port (HWCDC), not UART0. All firmware debug output uses `Serial0` explicitly to target the CH340 chip, which is more reliably supported by OS serial drivers.
+Firmware logging uses the ESP-IDF console (`esp_log`) on UART0, exposed through the on-board USB-UART (HW-010). Alternatively the module's native USB-Serial-JTAG can carry the console over USB-C, which removes the need for a separate USB-UART chip.
 
 ---
 
@@ -406,7 +405,7 @@ A CR2032 coin cell on VBAT keeps the DS1307 running while main power is off, so 
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Input supply | 5 V via USB-C | Provided by the LOLIN S3 board regulator |
+| Input supply | 5 V via USB-C | Stepped down by the on-board 3.3 V regulator |
 | 3.3 V rail | On-board LDO regulator | Supplies ESP32-S3 and GPIO outputs |
 | GPIO output current per pin | 40 mA maximum | ESP32-S3 absolute maximum |
 | Total GPIO current budget | 1 200 mA maximum (sum of all outputs) | Practical limit lower due to LDO rating |
@@ -419,7 +418,7 @@ A CR2032 coin cell on VBAT keeps the DS1307 running while main power is off, so 
 | DS1307 RTC | ≈ 1.5 mA | Supplied from the 5 V rail; ≈ µA on the backup battery when powered off |
 | Total estimated system current | ≤ 300 mA | ESP32-S3 WiFi active (≈ 240 mA peak) dominates |
 
-The L76-M33 adds ≤ 18 mA to the 3.3 V rail. The LOLIN S3 on-board LDO regulator is rated for at least 500 mA output; total system current remains well within that limit.
+The L76-M33 adds ≤ 18 mA to the 3.3 V rail. The on-board 3.3 V LDO regulator shall be rated for at least 500 mA output; total system current remains well within that limit.
 
 ---
 
@@ -429,7 +428,10 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 
 | Qty | Reference | Description | Value / Part number |
 |-----|-----------|-------------|-------------------|
-| 1 | U1 | Microcontroller module | WEMOS LOLIN S3 (ESP32-S3-WROOM-1-N16R8: 16 MB flash + 8 MB octal PSRAM) |
+| 1 | U1 | Microcontroller module | Espressif ESP32-S3-WROOM-1-N16R8 (16 MB flash + 8 MB octal PSRAM) |
+| 1 | U6 | 3.3 V regulator | LDO, 5 V → 3.3 V, ≥ 500 mA (project PCB; see HW-010) |
+| 1 | J2 | USB-C connector | USB 2.0 — power + native USB data (project PCB; see HW-010) |
+| 1 | U7 | USB-UART bridge (optional) | CH340 on UART0 for debug, or use the module's native USB-Serial-JTAG (HW-010) |
 | 3 | M1–M3 | Panel meter | Siemens 1604P, 1 V FSD, DC |
 | 3 | R1–R3 | RC filter resistor | 1 kΩ ±1 %, metal film, 250 mW |
 | 3 | C1–C3 | RC filter capacitor | 10 µF, 16 V, electrolytic, radial |
@@ -463,12 +465,13 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 | HW-007 | RTC selection and interface | ✅ Resolved — DS1307Z on I2C (SDA 8 / SCL 9, addr 0x68); 5 V part, I2C level-shifted to 3.3 V; 32.768 kHz crystal; CR2032 backup (see §8) |
 | HW-008 | RTC backup battery life | ⚠ Open — confirm CR2032 lifetime at the DS1307 backup current and specify the holder / replacement access |
 | HW-009 | Panel LED and encoder GPIOs | ✅ Resolved — LEDs GPIO 4–7; encoder A/B/button GPIO 13/14/47 (see §3, PMC-GUI-001) |
+| HW-010 | Module carrier circuitry | ⚠ Open — the WEMOS LOLIN S3 dev board is no longer the target; the project PCB must provide the support circuitry the dev board supplied: 3.3 V regulation from USB 5 V, the USB-C connector and native-USB wiring, the debug UART (CH340 on UART0, or the module's native USB-Serial-JTAG — which would free GPIO 43/44), supply decoupling, and the antenna provisions. To be specified. |
 
 ---
 
 ## 13. Verification and Test Criteria (Hardware)
 
-Electrical and mechanical checks supporting the functional acceptance criteria of PMC-FRS-001. Firmware-level test cases are in PMC-STD-001 §9.
+Electrical and mechanical checks supporting the functional acceptance criteria of PMC-FRS-001. Firmware-level test cases are in PMC-STD-001 §8.
 
 | ID | Method / setup | Pass criterion | Verifies |
 |----|----------------|----------------|----------|
@@ -479,6 +482,6 @@ Electrical and mechanical checks supporting the functional acceptance criteria o
 | HV-05 | Check logic levels on the GNSS and DCF77 signal pins | All within 3.3 V logic; no level shifter required | IC-HW-003..006 |
 | HV-06 | Verify GNSS antenna path and backup-power hot-start | Fix acquired via the antenna; hot-start after brief power loss | §6.5, §6.6 |
 | HV-07 | Verify DCF77 reception with the ferrite antenna sited away from noise | Frames decode reliably at the installation site | FR-DCF-005..007, DC-007 |
-| HV-08 | Measure total supply current in the worst case | Within the LOLIN S3 LDO budget | §10 |
+| HV-08 | Measure total supply current in the worst case | Within the on-board 3.3 V regulator budget | §10 |
 | HV-09 | Verify RTC I2C communication, timekeeping and battery-backup retention | RTC responds at 0x68; keeps time; retains time with main power removed (coin cell fitted) | FR-RTC-001..005, IC-HW-007 |
 | HV-10 | Verify each status LED and the rotary encoder | All four LEDs controllable; encoder produces clean quadrature steps and debounced button events | IC-HW-008..009, PMC-GUI-001 |

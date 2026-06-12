@@ -73,18 +73,18 @@ The front presents the three analog panel meters with the four status LEDs in a 
 
 ```
  FRONT VIEW
- ┌──────────────────────────────────────────────────────────┐
- │                                                          │
- │    +---+       +---+       +---+                         │
- │    │ H │       │ M │       │ S │           ● RTC         │
- │    +---+       +---+       +---+           ● DCF         │
- │   Hours      Minutes     Seconds           ● NTP         │
- │                                            ● GNSS        │
- │                                                          │
- └──────────────────────────────────────────────────────────┘
-   └──────── three moving-coil panel meters ───────┘   └ four white
-                                                          status LEDs
-                                                          (vertical) ┘
+ ┌────────────────────────────────────────────────────┐
+ │                                                    │
+ │    +---+       +---+       +---+                   │
+ │    │ H │       │ M │       │ S │        ● RTC      │
+ │    +---+       +---+       +---+        ● DCF      │
+ │   Hours      Minutes     Seconds        ● NTP      │
+ │                                         ● GNSS     │
+ │                                                    │
+ └────────────────────────────────────────────────────┘
+  └── three moving-coil panel meters ──┘└ four white ┘
+                                          status LEDs
+                                          (vertical)
 ```
 
 ### 3.2 Right Side (not visible from the front)
@@ -164,17 +164,17 @@ A rotary encoder with an integral push button on the right side lets the user se
         │  NORMAL   │────────────────────►│  SET: HOURS   │  rotate ⟳ = hours ±
         │ (display) │                     └───────┬───────┘
         └───────────┘                             │ short press
-              ▲                                    ▼
-              │                             ┌───────────────┐
-              │                             │ SET: MINUTES  │  rotate ⟳ = minutes ±
-              │                             └───────┬───────┘
-              │                                     │ short press
-              │                                     ▼
-              │                             ┌───────────────┐
-              │                             │ SET: SECONDS  │  rotate ⟳ = seconds ±
-              │                             └───────┬───────┘
-              │     short press (apply)            │
-              └────────────────────────────────────┘
+              ▲                                   ▼
+              │                           ┌───────────────┐
+              │                           │ SET: MINUTES  │  rotate ⟳ = minutes ±
+              │                           └───────┬───────┘
+              │                                   │ short press
+              │                                   ▼
+              │                           ┌───────────────┐
+              │                           │ SET: SECONDS  │  rotate ⟳ = seconds ±
+              │                           └───────┬───────┘
+              │     short press (apply)           │
+              └───────────────────────────────────┘
    Inactivity timeout (~30 s) in any SET state → return to NORMAL without applying.
 ```
 
@@ -213,18 +213,4 @@ While in set mode, the **meter for the field being edited tracks the encoder** (
 | UI-CON-001 (SMA) | — | PMC-HTD-001 §6.5 |
 | UI-CON-002 (USB-C) | — | PMC-HTD-001 §9, §10 |
 
-Test methods and pass conditions for these requirements belong in PMC-STD-001 §9 (firmware-observable behaviour) and PMC-HTD-001 §13 (hardware checks).
-
----
-
-## 9. Open Issues and TBD
-
-| ID | Item | Notes |
-|----|------|-------|
-| GUI-TBD-001 | Battery-backed RTC | ✅ Resolved — a DS1307Z battery-backed RTC is fitted (PMC-HTD-001 §8, PMC-STD-001 §5.11); manually-set and synced time is retained across power loss (FR-RTC-001..005). |
-| GUI-TBD-002 | LED GPIO assignment | ✅ Resolved — RTC/DCF/NTP/GNSS LEDs on GPIO 4/5/6/7 (push-pull + series resistor); see PMC-HTD-001 §3, driven by PMC-STD-001 §5.12. |
-| GUI-TBD-003 | Encoder GPIO assignment | ✅ Resolved — encoder A/B on GPIO 13/14 and button on GPIO 47 (inputs, internal pull-ups, firmware debounce); see PMC-HTD-001 §3, PMC-STD-001 §5.12. |
-| GUI-TBD-004 | Timing parameters | ✅ Resolved — long press 2 s, set-mode timeout 30 s, acquiring blink ≈ 1 Hz, set-mode RTC-LED blink ≈ 2 Hz (PMC-STD-001 §7 constants). |
-| GUI-TBD-005 | Confirm vs. cancel on timeout | ✅ Resolved — the inactivity timeout cancels without changing the time; the explicit final short press applies it. |
-| GUI-TBD-006 | Encoder normal-mode functions | ✅ Resolved (v1.0) — the encoder is reserved (no effect) in normal mode; LED-brightness use deferred to a later version. |
-| GUI-TBD-007 | Active-source emphasis | ✅ Resolved (v1.0) — no extra emphasis; the active source is the highest-priority lit LED (UI-IND-007). Per-LED PWM dimming deferred. |
+Test methods and pass conditions for these requirements belong in PMC-STD-001 §8 (firmware-observable behaviour) and PMC-HTD-001 §13 (hardware checks).
