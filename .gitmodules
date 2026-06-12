@@ -1,0 +1,6 @@
+[submodule "Hardware/KiCad/panelMeterClock/kicad-libraries"]
+	path = Hardware/KiCad/panelMeterClock/kicad-libraries
+	url = https://github.com/espressif/kicad-libraries.git
+[submodule "Hardware/KiCad/panelMeterClock/my-KiCad-library"]
+	path = Hardware/KiCad/panelMeterClock/my-KiCad-library
+	url = git@github.com:pe1mew/my-KiCad-library.git

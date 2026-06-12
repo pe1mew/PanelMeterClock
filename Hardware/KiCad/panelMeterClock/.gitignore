@@ -1,0 +1,44 @@
+# KiCad project — generated and user-local files
+# (fp-lib-table, sym-lib-table, *.kicad_pro/_sch/_pcb and the library
+#  folders are project content and stay tracked)
+
+# Project-local user state (view settings, selection filter)
+*.kicad_prl
+
+# Automatic backups (KiCad 6+) and autosaves
+*-backups/
+_autosave-*
+#auto_saved_files#
+*.kicad_sch-bak
+*.kicad_pcb-bak
+*.sch-bak
+*.bak
+*.bck
+*.000
+*~
+
+# Lock files of open documents
+*.lck
+~*.lck
+
+# Caches
+fp-info-cache
+
+# Netlists (regenerated from the schematic)
+*.net
+
+# Autorouter exchange files
+*.dsn
+*.ses
+
+# Generated BOM exports (curated BOM lives in Hardware/BOM)
+*.xml
+*.csv
+
+# Fabrication outputs (regenerate via Plot / Fabrication Outputs)
+*.gbr
+*.gbrjob
+*.drl
+
+# VS Code Local History extension
+.history/
