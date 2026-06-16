@@ -277,6 +277,212 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Connector:Screw_Terminal_01x02"
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "J"
+				(at 0 2.54 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "Screw_Terminal_01x02"
+				(at 0 -5.08 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Generic screw terminal, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "screw terminal"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "TerminalBlock*:*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "Screw_Terminal_01x02_1_1"
+				(rectangle
+					(start -1.27 1.27)
+					(end 1.27 -3.81)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(polyline
+					(pts
+						(xy -0.5334 0.3302) (xy 0.3302 -0.508)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -0.5334 -2.2098) (xy 0.3302 -3.048)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -0.3556 0.508) (xy 0.508 -0.3302)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -0.3556 -2.032) (xy 0.508 -2.8702)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 0 0)
+					(radius 0.635)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 0 -2.54)
+					(radius 0.635)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -5.08 0 0)
+					(length 3.81)
+					(name "Pin_1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -2.54 0)
+					(length 3.81)
+					(name "Pin_2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Device:C"
 			(pin_numbers
 				(hide yes)
@@ -414,6 +620,146 @@
 				(pin passive line
 					(at 0 -3.81 90)
 					(length 2.794)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "Device:R"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "R"
+				(at 2.032 0 90)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "R"
+				(at 0 0 90)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at -1.778 0 90)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Resistor"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "R res resistor"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "R_*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "R_0_1"
+				(rectangle
+					(start -1.016 -2.54)
+					(end 1.016 2.54)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "R_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 1.27)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 1.27)
 					(name ""
 						(effects
 							(font
@@ -1263,10 +1609,22 @@
 		)
 	)
 	(junction
+		(at 302.26 120.65)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "06f2c913-ba4f-422c-aaa0-9c50570ad521")
+	)
+	(junction
 		(at 299.72 80.01)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "0b2980bd-7c20-48dd-afac-f8206127be96")
+	)
+	(junction
+		(at 289.56 99.06)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "108f9b52-09c7-4fca-b871-e66a538154d9")
 	)
 	(junction
 		(at 119.38 22.86)
@@ -1275,10 +1633,56 @@
 		(uuid "1e72fb93-7658-4041-9cb2-fce3bfff7454")
 	)
 	(junction
+		(at 289.56 118.11)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "25fb3c12-845d-4f71-a682-86b31a47eb72")
+	)
+	(junction
+		(at 302.26 128.27)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "49968092-645c-442a-9d8e-d91a7258661a")
+	)
+	(junction
+		(at 289.56 138.43)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "5a5dab33-79b0-4367-9720-68781174a432")
+	)
+	(junction
+		(at 302.26 109.22)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "aa61f294-18a5-4554-ab13-87066b960e5d")
+	)
+	(junction
+		(at 289.56 109.22)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "b0eface0-1d4c-4eaf-835f-3e7ac39a2afb")
+	)
+	(junction
+		(at 302.26 140.97)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "c865cd0b-5ae1-43ef-8bdd-7d89c7cf9900")
+	)
+	(junction
 		(at 289.56 82.55)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "dc772813-ebb9-496d-bb28-319888180bad")
+	)
+	(wire
+		(pts
+			(xy 289.56 148.59) (xy 302.26 148.59)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "047a7833-3eff-4b49-ad01-c3919ccdd7f6")
 	)
 	(wire
 		(pts
@@ -1292,6 +1696,36 @@
 	)
 	(wire
 		(pts
+			(xy 302.26 101.6) (xy 306.07 101.6)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "158f94a0-fabe-4234-bcba-f17299822e09")
+	)
+	(wire
+		(pts
+			(xy 289.56 118.11) (xy 292.1 118.11)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1e0528e8-0399-4e48-bc67-56b37218b018")
+	)
+	(wire
+		(pts
+			(xy 55.88 48.26) (xy 81.28 48.26)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "226c4e42-f47d-4a5f-a8ab-d7fbcf458b43")
+	)
+	(wire
+		(pts
 			(xy 127 116.84) (xy 127 119.38)
 		)
 		(stroke
@@ -1299,6 +1733,16 @@
 			(type default)
 		)
 		(uuid "2886392f-c814-43cf-a3d8-b3a3305c0099")
+	)
+	(wire
+		(pts
+			(xy 289.56 109.22) (xy 302.26 109.22)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "291d4bcb-dfa0-46af-a21e-e805c8e708c0")
 	)
 	(wire
 		(pts
@@ -1312,6 +1756,16 @@
 	)
 	(wire
 		(pts
+			(xy 302.26 109.22) (xy 302.26 120.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2c4d1271-f52d-414f-b09f-ec237c924775")
+	)
+	(wire
+		(pts
 			(xy 299.72 80.01) (xy 299.72 76.2)
 		)
 		(stroke
@@ -1319,6 +1773,36 @@
 			(type default)
 		)
 		(uuid "2fb30404-c971-4d45-9ebf-b399e2bc99f0")
+	)
+	(wire
+		(pts
+			(xy 302.26 120.65) (xy 306.07 120.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "36c9a747-abbe-4463-b731-7c9b7cf08408")
+	)
+	(wire
+		(pts
+			(xy 289.56 128.27) (xy 302.26 128.27)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "37e57e7b-0196-482b-a13d-4ad71345f9da")
+	)
+	(wire
+		(pts
+			(xy 287.02 99.06) (xy 289.56 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3d644657-62ba-46d6-a523-6ea60f01da2a")
 	)
 	(wire
 		(pts
@@ -1352,6 +1836,16 @@
 	)
 	(wire
 		(pts
+			(xy 302.26 109.22) (xy 302.26 101.6)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4e77d412-c878-4c7c-b721-fe9ecd98a11c")
+	)
+	(wire
+		(pts
 			(xy 102.87 119.38) (xy 127 119.38)
 		)
 		(stroke
@@ -1372,6 +1866,26 @@
 	)
 	(wire
 		(pts
+			(xy 289.56 99.06) (xy 292.1 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "693641d8-b56d-4bbe-806e-77353e34a0f9")
+	)
+	(wire
+		(pts
+			(xy 256.54 138.43) (xy 279.4 138.43)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6abd1ebe-2521-4ddf-ad46-fca375e91dce")
+	)
+	(wire
+		(pts
 			(xy 303.53 82.55) (xy 289.56 82.55)
 		)
 		(stroke
@@ -1382,6 +1896,16 @@
 	)
 	(wire
 		(pts
+			(xy 302.26 148.59) (xy 302.26 140.97)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6c4b430e-bc2b-4859-abfa-9de7511db4b6")
+	)
+	(wire
+		(pts
 			(xy 303.53 87.63) (xy 276.86 87.63)
 		)
 		(stroke
@@ -1389,6 +1913,36 @@
 			(type default)
 		)
 		(uuid "6c4dffb3-17b6-4f7b-bac5-10a64b399e6b")
+	)
+	(wire
+		(pts
+			(xy 289.56 99.06) (xy 289.56 100.33)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6cb5405c-fb6b-4d91-a303-d2d911a3270e")
+	)
+	(wire
+		(pts
+			(xy 289.56 127) (xy 289.56 128.27)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6cd08c94-3507-4057-a7bf-ce38f14da614")
+	)
+	(wire
+		(pts
+			(xy 289.56 138.43) (xy 292.1 138.43)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7273adf9-5d31-4953-bbc7-32372954c26b")
 	)
 	(wire
 		(pts
@@ -1432,6 +1986,16 @@
 	)
 	(wire
 		(pts
+			(xy 289.56 147.32) (xy 289.56 148.59)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "818165ff-5e58-49c9-9333-5e07c8958976")
+	)
+	(wire
+		(pts
 			(xy 289.56 76.2) (xy 289.56 82.55)
 		)
 		(stroke
@@ -1439,6 +2003,56 @@
 			(type default)
 		)
 		(uuid "8439be30-a569-4db1-837d-b8f830f02874")
+	)
+	(wire
+		(pts
+			(xy 172.72 93.98) (xy 199.39 93.98)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8977a246-980f-4a41-982f-72a3e9da45aa")
+	)
+	(wire
+		(pts
+			(xy 299.72 99.06) (xy 306.07 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8a87223c-1adc-44e4-a3e6-86028d2a9fd3")
+	)
+	(wire
+		(pts
+			(xy 55.88 50.8) (xy 81.28 50.8)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "901d0393-7776-4598-ab06-0ac8e2ba63f6")
+	)
+	(wire
+		(pts
+			(xy 289.56 107.95) (xy 289.56 109.22)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a52540fb-e8f0-4dcc-85d1-15aba05996fb")
+	)
+	(wire
+		(pts
+			(xy 256.54 118.11) (xy 279.4 118.11)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a7caf6aa-1fa3-4c58-b8f8-69fd8fbbf99e")
 	)
 	(wire
 		(pts
@@ -1452,6 +2066,16 @@
 	)
 	(wire
 		(pts
+			(xy 256.54 109.22) (xy 289.56 109.22)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b138c8ea-58ef-47cb-873f-ac374d08e7d4")
+	)
+	(wire
+		(pts
 			(xy 290.83 76.2) (xy 289.56 76.2)
 		)
 		(stroke
@@ -1459,6 +2083,66 @@
 			(type default)
 		)
 		(uuid "b1f1faa3-20be-4d0a-b424-05723e0b232d")
+	)
+	(wire
+		(pts
+			(xy 302.26 140.97) (xy 306.07 140.97)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c585415f-6649-44c9-b770-b6b93b8713d6")
+	)
+	(wire
+		(pts
+			(xy 302.26 128.27) (xy 302.26 120.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d5515aa1-9909-451e-81e9-c7de974ef574")
+	)
+	(wire
+		(pts
+			(xy 289.56 118.11) (xy 289.56 119.38)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d5aa04ea-2123-4c80-8253-2ede01595caa")
+	)
+	(wire
+		(pts
+			(xy 289.56 138.43) (xy 289.56 139.7)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "db540143-93d3-45d0-827e-00f04777a384")
+	)
+	(wire
+		(pts
+			(xy 256.54 99.06) (xy 279.4 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e69e405c-63fe-4661-978c-1ad3989b5e1a")
+	)
+	(wire
+		(pts
+			(xy 299.72 118.11) (xy 306.07 118.11)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "eaa67c29-59ae-4849-b530-d2807ba5a408")
 	)
 	(wire
 		(pts
@@ -1480,6 +2164,46 @@
 		)
 		(uuid "f34e5b6b-02b5-4938-9d77-7f0c614ec0f7")
 	)
+	(wire
+		(pts
+			(xy 299.72 138.43) (xy 306.07 138.43)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f3d44669-ec16-464c-aea3-9b1b9802556a")
+	)
+	(wire
+		(pts
+			(xy 302.26 128.27) (xy 302.26 140.97)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f4ee0c2d-cabf-4f81-8291-6b4a8a040cc9")
+	)
+	(wire
+		(pts
+			(xy 287.02 138.43) (xy 289.56 138.43)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fa571a0c-4ef3-4ff5-906e-29abab082b45")
+	)
+	(wire
+		(pts
+			(xy 287.02 118.11) (xy 289.56 118.11)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "faa194b7-a173-483c-bd29-60e439223fba")
+	)
 	(label "3V3"
 		(at 104.14 22.86 0)
 		(effects
@@ -1489,6 +2213,36 @@
 			(justify left bottom)
 		)
 		(uuid "0acf2ff6-747d-4409-8c4e-171a90dd5b59")
+	)
+	(label "METER_MIN"
+		(at 57.15 50.8 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "0d83205c-4a16-4442-ad36-8e3ea709870e")
+	)
+	(label "METER_MIN"
+		(at 257.81 118.11 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "262cd482-111c-48ae-a73e-7af55f0c71ea")
+	)
+	(label "METER_SEC"
+		(at 198.12 93.98 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "554402e1-9abd-4c7e-9711-e2945624bdcc")
 	)
 	(label "3V3"
 		(at 278.13 80.01 0)
@@ -1530,6 +2284,26 @@
 		)
 		(uuid "6e69232f-a0c1-4a42-8030-a2097b862868")
 	)
+	(label "GND"
+		(at 257.81 109.22 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "75c07cfe-670e-408b-a02d-6bdf4862d36d")
+	)
+	(label "METER_SEC"
+		(at 257.81 99.06 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "7d042fe8-0f27-4696-beb4-c3b0b1aa4f83")
+	)
 	(label "DCF77_PON"
 		(at 278.13 85.09 0)
 		(effects
@@ -1560,6 +2334,16 @@
 		)
 		(uuid "b34bde0f-2591-49c9-beeb-9884bffb2ec9")
 	)
+	(label "METER_HOUR"
+		(at 257.81 138.43 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "d50ec029-6378-4463-8460-f2171883d87b")
+	)
 	(label "DCF77_TIM"
 		(at 198.12 83.82 180)
 		(effects
@@ -1569,6 +2353,16 @@
 			(justify right bottom)
 		)
 		(uuid "ed984940-c5c8-4d68-9da2-f04c8d1bf62d")
+	)
+	(label "METER_HOUR"
+		(at 57.15 48.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "f6029caa-bb9f-44f8-a640-b5cba834eff8")
 	)
 	(symbol
 		(lib_id "Espressif:ESP32-S3-WROOM-1")
@@ -1770,6 +2564,330 @@
 		)
 	)
 	(symbol
+		(lib_id "Device:R")
+		(at 295.91 138.43 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "27bf7d4c-f1e6-4ad3-aedb-93a21b7d53f0")
+		(property "Reference" "R6"
+			(at 295.91 132.08 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "2K"
+			(at 295.91 134.62 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 295.91 140.208 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 295.91 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 295.91 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "0bcb7c79-64ae-4903-a851-ae46682a63fb")
+		)
+		(pin "1"
+			(uuid "0d1f27f1-c9e2-4e63-a640-c65817a3dbb8")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "R6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:Screw_Terminal_01x02")
+		(at 311.15 118.11 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "288bea22-bde7-43cc-a0fd-a65f6f57140a")
+		(property "Reference" "J3"
+			(at 313.69 118.1099 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "PanelMeter Minutes"
+			(at 313.69 120.6499 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 311.15 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Generic screw terminal, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 311.15 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a86fdd82-34b9-4255-98af-9e5911f36a13")
+		)
+		(pin "2"
+			(uuid "6f138052-4cd4-43b7-a412-7d857e6af3b2")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "J3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 289.56 104.14 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "40f39265-b942-4d58-b994-badb79b83b0a")
+		(property "Reference" "C3"
+			(at 293.37 102.8699 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "10u"
+			(at 293.37 105.4099 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 290.5252 107.95 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 289.56 104.14 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 289.56 104.14 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "6f95fadc-c260-40f1-999f-661c2f24eeee")
+		)
+		(pin "1"
+			(uuid "e18441d7-d88d-46aa-81a4-70b91401ba54")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "C3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 295.91 99.06 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "51cd26ab-53ee-4afb-a2fb-e81f00d9c35d")
+		(property "Reference" "R2"
+			(at 295.91 92.71 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "2K"
+			(at 295.91 95.25 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 295.91 100.838 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 295.91 99.06 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 295.91 99.06 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "7a48fbe6-c099-4b72-8bb6-9b100882b115")
+		)
+		(pin "1"
+			(uuid "7e157be8-9877-49e0-9ca5-2c32bc4eaf84")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "R2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:C")
 		(at 294.64 76.2 90)
 		(unit 1)
@@ -1844,6 +2962,574 @@
 			(project "panelMeterClock"
 				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
 					(reference "C2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 283.21 118.11 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "82851a33-fcd2-4952-a643-8226f602c270")
+		(property "Reference" "R3"
+			(at 283.21 111.76 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1K"
+			(at 283.21 114.3 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 283.21 119.888 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 283.21 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 283.21 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "b7572780-27c3-47f3-87cf-86c639fc42f6")
+		)
+		(pin "1"
+			(uuid "c83cbf04-c4a5-443d-a490-f45ca0b4cb86")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "R3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 295.91 118.11 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "86c51c69-e92f-4673-b163-e5222e947ef7")
+		(property "Reference" "R4"
+			(at 295.91 111.76 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "2K"
+			(at 295.91 114.3 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 295.91 119.888 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 295.91 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 295.91 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "e3c2488a-5662-4d63-9b23-ef7cc64fcca6")
+		)
+		(pin "1"
+			(uuid "a822215d-c7e3-423d-bfca-560752d1b1e8")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "R4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:Screw_Terminal_01x02")
+		(at 311.15 138.43 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "9ab9afeb-58ff-411a-84be-f3c3b5324a19")
+		(property "Reference" "J4"
+			(at 313.69 138.4299 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "PanelMeter Hours"
+			(at 313.69 140.9699 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 311.15 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Generic screw terminal, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 311.15 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "d94bd0ea-b390-4b19-902a-bf577e96378b")
+		)
+		(pin "2"
+			(uuid "b57f3d97-c25e-446e-85ae-9a9126f7ebbb")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "J4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:Screw_Terminal_01x02")
+		(at 311.15 99.06 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "9ac82e26-d2fd-44a8-86c8-9bba8ca3d3cb")
+		(property "Reference" "J2"
+			(at 313.69 99.0599 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "PanelMeter Seconds"
+			(at 313.69 101.5999 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 311.15 99.06 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 99.06 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Generic screw terminal, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 311.15 99.06 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "630f1e41-a7c4-4d09-8f60-b5a1fdcfa7e5")
+		)
+		(pin "2"
+			(uuid "b2d95c22-afa8-4681-8134-4dac1319e82f")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "J2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 289.56 143.51 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "aa6f30ed-e91f-4260-be28-a3dbfe4dc365")
+		(property "Reference" "C5"
+			(at 293.37 142.2399 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "10u"
+			(at 293.37 144.7799 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 290.5252 147.32 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 289.56 143.51 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 289.56 143.51 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "66ec253f-cb19-44a5-8439-8ef22ec0ebe2")
+		)
+		(pin "1"
+			(uuid "94d4b944-2e9f-4ac7-9896-193d991457b4")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "C5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 283.21 99.06 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "b44445a7-9d2f-46bc-b3db-03343b67428b")
+		(property "Reference" "R1"
+			(at 283.21 92.71 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1K"
+			(at 283.21 95.25 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 283.21 100.838 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 283.21 99.06 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 283.21 99.06 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "b6678adb-70e8-4544-ba18-534cc9694858")
+		)
+		(pin "1"
+			(uuid "12492ba5-57a3-4d37-8561-cc27179aadc6")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "R1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 289.56 123.19 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "b9bb69c8-a25c-420e-a8f5-c4c37300d028")
+		(property "Reference" "C4"
+			(at 293.37 121.9199 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "10u"
+			(at 293.37 124.4599 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 290.5252 127 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 289.56 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 289.56 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "70db9769-816f-48d9-a320-0af88c07d444")
+		)
+		(pin "1"
+			(uuid "8035d940-e14a-4b1b-bcb6-0a523e737b48")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "C4")
 					(unit 1)
 				)
 			)
@@ -2012,6 +3698,86 @@
 			(project "panelMeterClock"
 				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
 					(reference "C1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 283.21 138.43 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "fdd754f6-7073-4070-ab85-f2dc45a04697")
+		(property "Reference" "R5"
+			(at 283.21 132.08 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1K"
+			(at 283.21 134.62 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 283.21 140.208 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 283.21 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 283.21 138.43 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "5ff9a0a4-5720-4b2e-b1b7-b39b644655a3")
+		)
+		(pin "1"
+			(uuid "cdcc5c73-4d73-40b4-abfe-f5eee912af79")
+		)
+		(instances
+			(project "panelMeterClock"
+				(path "/0fe5850d-a8b5-4300-b08a-1d15f3714de1"
+					(reference "R5")
 					(unit 1)
 				)
 			)

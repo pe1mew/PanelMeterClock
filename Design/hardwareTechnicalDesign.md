@@ -11,8 +11,8 @@
 |-------|-------|
 | Document title | Hardware Technical Design — PanelMeterClock |
 | Document ID | PMC-HTD-001 |
-| Version | 0.1 (draft) |
-| Date | 2026-04-29 |
+| Version | 0.2 (draft) |
+| Date | 2026-06-15 |
 | Author | Remko Welling |
 | Status | Draft — under review |
 
@@ -21,6 +21,7 @@
 | Version | Date | Author | Change Summary |
 |---------|------|--------|----------------|
 | 0.1 | 2026-04-29 | Remko Welling | Initial draft; hardware design content migrated from PMC-FRS-001 and supplemented with circuit analysis |
+| 0.2 | 2026-06-15 | Remko Welling | Raised meter PWM to 156.25 kHz and reduced the RC filter capacitor to 4.7 µF (f_c ≈ 33.9 Hz, −73 dB at PWM) to clear the 77.5 kHz DCF77 band; updated §4.2/§4.4/§5/§11; added EMC open issue HW-011 and hardware test HV-11; corrected the §12 table header |
 
 ### 1.3 Relationship to Other Documents
 
@@ -121,7 +122,7 @@ Each of the three meter channels follows the same topology:
 ESP32-S3 GPIO ──┬── R_filter (1 kΩ) ──┬── R_series ──[ Meter coil ]── GND
                 │                     │
                (PWM)               C_filter
-                                   (10 µF)
+                                   (4.7 µF)
                                       │
                                      GND
 ```
@@ -177,25 +178,25 @@ One RC filter is fitted per channel. Values and rationale:
 | Component | Value | Tolerance | Notes |
 |-----------|-------|-----------|-------|
 | R_filter | 1 kΩ | ±5 % (±1 % preferred) | Carbon or metal film; rated ≥ 100 mW |
-| C_filter | 10 µF | ±20 % electrolytic | Positive terminal toward GPIO output (higher potential side) |
+| C_filter | 4.7 µF | ±20 % | Electrolytic, positive terminal toward GPIO (or non-polar film/ceramic) |
 
 **Cutoff frequency:**
 
 ```
-f_c = 1 / (2π × R × C) = 1 / (2π × 1 000 × 10 × 10⁻⁶) ≈ 15.9 Hz
+f_c = 1 / (2π × R × C) = 1 / (2π × 1 000 × 4.7 × 10⁻⁶) ≈ 33.9 Hz
 ```
 
-**Attenuation at PWM frequency (80 kHz):**
+**Attenuation at PWM frequency (156.25 kHz):**
 
 ```
-A = 20 × log₁₀(f_c / f_PWM) = 20 × log₁₀(15.9 / 80 000) = −74 dB
+A = 20 × log₁₀(f_c / f_PWM) = 20 × log₁₀(33.9 / 156 250) = −73 dB
 ```
 
-At −74 dB the PWM ripple reaching the meter is negligible (< 0.2 mV peak). Residual mechanical damping of the moving-coil meter suppresses any remaining ripple further.
+At −73 dB the PWM ripple reaching the meter is negligible (< 0.3 mV peak). Residual mechanical damping of the moving-coil meter suppresses any remaining ripple further.
 
 **DC gain:** 0 dB (unity). The filter introduces no attenuation at DC; the output voltage at any steady duty cycle equals `(duty / 255) × 3.3 V` within the accuracy of the resistor and capacitor tolerances.
 
-**Settling time:** The RC time constant τ = R × C = 10 ms. Full settling to < 1 % error requires ≈ 5τ = 50 ms. The panel meter's mechanical inertia (settling time > 500 ms) dominates entirely, so the RC settling time is not the limiting factor.
+**Settling time:** The RC time constant τ = R × C = 4.7 ms. Full settling to < 1 % error requires ≈ 5τ = 24 ms. The panel meter's mechanical inertia (settling time > 500 ms) dominates entirely, so the RC settling time is not the limiting factor.
 
 ### 4.5 PWM-to-Voltage-to-Deflection Mapping
 
@@ -219,7 +220,7 @@ The ESP32-S3 LEDC peripheral generates all three PWM signals independently.
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | Clock source | APB clock (80 MHz) | Stable; not affected by CPU frequency scaling |
-| PWM frequency | 80 000 Hz | Ultrasonic; inaudible and above panel meter mechanical response |
+| PWM frequency | 156 250 Hz | Ultrasonic; clears the 77.5 kHz DCF77 band (§7.4, HW-011); above panel meter mechanical response |
 | Resolution | 8 bits (256 steps) | Gives 256 duty positions; adequate for meter accuracy |
 | Full-scale duty register value | 232 | Corresponds to 3.00 V output |
 
@@ -233,7 +234,7 @@ The ESP32-S3 LEDC peripheral generates all three PWM signals independently.
 
 Each meter uses a dedicated timer so that the PWM frequency of one channel can be changed independently without affecting the others (used during development/calibration).
 
-**Frequency validation:** The 80 kHz operating frequency was selected and verified in `Research/PWMTest.md`. Key criteria: ultrasonic (> 20 kHz), above the RC filter corner frequency by > 70 dB, and achievable with integer divider from the 80 MHz APB clock (80 MHz / 80 kHz = 1 000, exact).
+**Frequency validation:** The original RC + PWM bench test (`Research/PWMTest`) validated the filtering approach across 20–80 kHz with a 10 µF capacitor. The operating point was subsequently **raised to 156.25 kHz** to clear the 77.5 kHz DCF77 reception band — the former 80 kHz fundamental sat only 2.5 kHz away (see §7.4 and HW-011) — and the filter capacitor reduced to 4.7 µF to suit (§4.4). Selection criteria: ultrasonic (> 20 kHz); the fundamental and all harmonics clear of 77.5 kHz (harmonics lie above the fundamental, so a fundamental ≥ 100 kHz cannot fall on 77.5 kHz); the filter corner > 70 dB below the PWM frequency; and an exact integer divider from the 80 MHz LEDC clock (80 MHz ÷ 512 = 156.25 kHz — i.e. ÷2 with 8-bit duty resolution; the 8-bit maximum is 312.5 kHz).
 
 ---
 
@@ -434,7 +435,7 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 | 1 | U7 | USB-UART bridge (optional) | CH340 on UART0 for debug, or use the module's native USB-Serial-JTAG (HW-010) |
 | 3 | M1–M3 | Panel meter | Siemens 1604P, 1 V FSD, DC |
 | 3 | R1–R3 | RC filter resistor | 1 kΩ ±1 %, metal film, 250 mW |
-| 3 | C1–C3 | RC filter capacitor | 10 µF, 16 V, electrolytic, radial |
+| 3 | C1–C3 | RC filter capacitor | 4.7 µF, 16 V (electrolytic radial, or non-polar film/ceramic) |
 | 3 | R4–R6 | Panel meter series resistor | 2.0 kΩ ±1 %, metal film (per §4.3; measured I_FSD = 1 mA, R_coil = 82.2 Ω) |
 | 1 | U2 | GNSS receiver module | Quectel L76-M33 (multi-constellation, 3.3 V, NMEA 0183, 1PPS, U.FL) |
 | 1 | BT1 | GNSS backup battery | MS621FE rechargeable 3.0 V LiMnO₂ coin cell (or 0.1 F supercapacitor) |
@@ -455,8 +456,8 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 
 ## 12. Open Hardware Issues
 
-| ID | Item | Impact | Status |
-|----|------|--------|--------|
+| ID | Item | Status |
+|----|------|--------|
 | HW-001 | GNSS module selection | ✅ Resolved — Quectel L76-M33; 3.3 V, no level shifter required, U.FL antenna connector, default 9 600 baud (see §6) |
 | HW-002 | Series resistor values R4–R6 | ✅ Resolved — I_FSD = 1 mA, V_FSD = 82.2 mV, R_coil = 82.2 Ω → R_series = 2.0 kΩ E24 (see §4.3) |
 | HW-004 | GNSS antenna connector | ✅ Resolved — SMA female chassis connector |
@@ -466,6 +467,7 @@ This list covers the signal conditioning and display subsystem. Connectors, PCB,
 | HW-008 | RTC backup battery life | ⚠ Open — confirm CR2032 lifetime at the DS1307 backup current and specify the holder / replacement access |
 | HW-009 | Panel LED and encoder GPIOs | ✅ Resolved — LEDs GPIO 4–7; encoder A/B/button GPIO 13/14/47 (see §3, PMC-GUI-001) |
 | HW-010 | Module carrier circuitry | ⚠ Open — the WEMOS LOLIN S3 dev board is no longer the target; the project PCB must provide the support circuitry the dev board supplied: 3.3 V regulation from USB 5 V, the USB-C connector and native-USB wiring, the debug UART (CH340 on UART0, or the module's native USB-Serial-JTAG — which would free GPIO 43/44), supply decoupling, and the antenna provisions. To be specified. |
+| HW-011 | DCF77 / PWM coexistence (EMC) | ⚠ Open — the meter PWM and the DCF77 receiver share the enclosure. The PWM fundamental is set to **156.25 kHz** (raised from 80 kHz, which sat only 2.5 kHz from 77.5 kHz) so it and its harmonics stay clear of the DCF77 band (§5). Mitigations: keep the GPIO→R→C filter loop physically small, and site the ferrite antenna away from the PWM traces (§7.4). Confirm by measurement (HV-11) that DCF77 decodes with all three meters sweeping. |
 
 ---
 
@@ -485,3 +487,4 @@ Electrical and mechanical checks supporting the functional acceptance criteria o
 | HV-08 | Measure total supply current in the worst case | Within the on-board 3.3 V regulator budget | §10 |
 | HV-09 | Verify RTC I2C communication, timekeeping and battery-backup retention | RTC responds at 0x68; keeps time; retains time with main power removed (coin cell fitted) | FR-RTC-001..005, IC-HW-007 |
 | HV-10 | Verify each status LED and the rotary encoder | All four LEDs controllable; encoder produces clean quadrature steps and debounced button events | IC-HW-008..009, PMC-GUI-001 |
+| HV-11 | With DCF77 receiving, drive all three meters sweeping full scale; compare the DCF77 decode / parity-error rate against meters held static. Probe for PWM emission near 77.5 kHz at the ferrite antenna | No significant rise in DCF77 error rate with meters active; the 156.25 kHz PWM fundamental and its harmonics do not appear in the 77.5 kHz passband | FR-DCF-005..007, DC-004, HW-011 |

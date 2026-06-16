@@ -20,7 +20,7 @@ A wall clock that displays the current local time on three Siemens 1604P moving-
 |-----------|---------|
 | Microcontroller | WEMOS LOLIN S3 (ESP32-S3-WROOM-1, dual-core 240 MHz, 16 MB flash, 8 MB PSRAM) |
 | Panel meters | 3 × Siemens 1604P, 1 V FSD, modified to 3 V FSD by series resistor substitution |
-| PWM filter | RC low-pass filter per channel: R = 1 kΩ, C = 10 µF, f_c ≈ 16 Hz |
+| PWM filter | RC low-pass filter per channel: R = 1 kΩ, C = 4.7 µF, f_c ≈ 34 Hz (PWM 156.25 kHz) |
 | Series resistor | 2.0 kΩ ±1 % metal film per meter (measured: I_FSD = 1 mA, R_coil = 82.2 Ω) |
 | GNSS receiver | Optional; Quectel L76-M33 (GPS/GLONASS/Galileo/BeiDou, 3.3 V, NMEA 0183, 1PPS, U.FL) |
 | GNSS antenna | SMA female chassis connector (J1) via U.FL-to-SMA pigtail; external active or passive antenna |
@@ -106,7 +106,7 @@ The main application is configured through the embedded web GUI at `http://panel
 | [Hardware Technical Design](Design/hardwareTechnicalDesign.md) | Circuit design, component values, GPIO assignment, BOM |
 | [FOTA Signature Considerations](Design/signatureConciderations.md) | Detached signature scheme analysis and alternatives |
 | [PWM Driver Design](Research/PWMDriver.md) | PWM driver API and glitch-free duty update design |
-| [PWM Test Plan](Research/PWMTest.md) | RC filter and 80 kHz frequency verification |
+| [PWM Test Plan](Research/PWMTest.md) | RC filter and PWM frequency verification (original 20–80 kHz bench test) |
 
 ## License
 

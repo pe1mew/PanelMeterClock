@@ -2,22 +2,24 @@
 #include "pwm_driver.h"
 
 // Select exactly one mode (or neither for full pot control):
-//   POT_CONTROL_DISABLED – fixed 80 kHz / fixed duty (FIXED_DUTY)
-//   SWEEP_MODE           – fixed 80 kHz, duty sweeps 0→pot-max in 60 steps of 1 s each
+//   POT_CONTROL_DISABLED – fixed 156 kHz / fixed duty (FIXED_DUTY)
+//   POT_DUTY_ONLY        – fixed 156 kHz / duty from pot
+//   SWEEP_MODE           – fixed 156 kHz, duty sweeps 0→pot-max in 60 steps of 1 s each
+#define POT_DUTY_ONLY
 // #define POT_CONTROL_DISABLED
-#define SWEEP_MODE
+// #define SWEEP_MODE
 
 const int   POT_FREQ_PIN        = 1;       // ADC1_CH0 - frequency control potentiometer
 const int   POT_DUTY_PIN        = 2;       // ADC1_CH1 - duty cycle control potentiometer
 const int   FREQ_MIN            = 20000;   // Hz
-const int   FREQ_MAX            = 80000;   // Hz
+const int   FREQ_MAX            = 156000;  // Hz
 const int   ADC_MIN             = 0;
 const int   ADC_MAX             = 4095;    // 12-bit ADC
 const int   ADC_RESOLUTION_BITS = 12;
 const int   DUTY_MIN            = 0;
 const int   DUTY_MAX            = 255;     // 8-bit duty cycle
 const int   DUTY_INIT           = 128;     // 50% at startup
-const int   FIXED_FREQ          = 80000;   // Hz - used when POT_CONTROL_DISABLED
+const int   FIXED_FREQ          = 156000;  // Hz - used when POT_CONTROL_DISABLED
 const int   FIXED_DUTY          = 86;      // /255 - used when POT_CONTROL_DISABLED
 const float SUPPLY_VOLTAGE_V    = 3.3f;
 const int   SERIAL_BAUD_RATE    = 115200;
@@ -48,6 +50,9 @@ static void control_task(void *arg)
 #if defined(POT_CONTROL_DISABLED)
         int freq = FIXED_FREQ;
         int duty = FIXED_DUTY;
+#elif defined(POT_DUTY_ONLY)
+        int freq = FIXED_FREQ;
+        int duty = map(analogRead(POT_DUTY_PIN), ADC_MIN, ADC_MAX, DUTY_MIN, DUTY_MAX);
 #elif defined(SWEEP_MODE)
         int maxDuty = map(analogRead(POT_DUTY_PIN), ADC_MIN, ADC_MAX, DUTY_MIN, DUTY_MAX);
         int freq    = FIXED_FREQ;
@@ -76,6 +81,11 @@ static void control_task(void *arg)
                 "Freq: %5d Hz | Duty: %3d/255 (%5.1f%%) | V_out ~%.2f V"
                 " | [fixed]\n",
                 freq, duty, dutyPct, voltageOut);
+#elif defined(POT_DUTY_ONLY)
+            Serial0.printf(
+                "Freq: %5d Hz | Duty: %3d/255 (%5.1f%%) | V_out ~%.2f V"
+                " | [freq fixed, duty pot]\n",
+                freq, duty, dutyPct, voltageOut);
 #elif defined(SWEEP_MODE)
             Serial0.printf(
                 "Freq: %5d Hz | Duty: %3d/255 (%5.1f%%) | V_out ~%.2f V"
@@ -101,7 +111,7 @@ void setup()
 {
     Serial0.begin(SERIAL_BAUD_RATE);
 
-#if defined(SWEEP_MODE)
+#if defined(SWEEP_MODE) || defined(POT_DUTY_ONLY)
     analogReadResolution(ADC_RESOLUTION_BITS);
     analogSetPinAttenuation(POT_DUTY_PIN, ADC_11db);
 #elif !defined(POT_CONTROL_DISABLED)

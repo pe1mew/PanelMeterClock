@@ -28,6 +28,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
+#include "driver/ledc.h"
 
 #if USE_PHASE_DECODER
 #include "dcf77p.h"
@@ -35,9 +36,10 @@
 #include "dcf77.h"
 #endif
 
-#define LED_DCF_GPIO       GPIO_NUM_5 /* front-panel DCF status LED (PMC-HTD-001 §3) */
-#define LED_INTERVAL_MS    250        /* loop pace; LED toggles every 2nd pass (~1 Hz blink) */
-#define STATUS_INTERVAL_MS 10000      /* periodic status summary */
+#define LED_DCF_GPIO       GPIO_NUM_5  /* front-panel DCF status LED (PMC-HTD-001 §3) */
+#define METER_GPIO         GPIO_NUM_15 /* panel meter PWM output */
+#define LED_INTERVAL_MS    250         /* loop pace; LED toggles every 2nd pass (~1 Hz blink) */
+#define STATUS_INTERVAL_MS 10000       /* periodic status summary */
 
 static SemaphoreHandle_t log_mutex; // groups multi-line prints from decoder and main task
 
@@ -102,6 +104,100 @@ static dcf77p_t dcfp;
 static char tick_line[62];
 static bool tick_line_dirty = false;
 static int  unsynced_pos    = 0;
+
+// 60-second sliding window for pulse-shape quality (one entry per second).
+// A '1' entry means that second's tick was UNDEFINED (unclassifiable pulse).
+// Window depth matches one DCF frame so the metric tracks the most recent minute.
+static uint32_t s_prev_undef = 0;
+static uint8_t  s_undef_win[60];
+static uint8_t  s_win_idx    = 0;
+static uint32_t s_win_sum    = 0;
+
+// ---------------------------------------------------------------------------
+// Panel meter — LEDC PWM output on METER_GPIO
+// ---------------------------------------------------------------------------
+// 156 kHz, 8-bit resolution (0-255).  Full-scale deflection is duty 224/255
+// so the needle never slams against the end-stop at 100 % quality.
+// The composite quality Q (0-100) maps linearly to duty 0-224.
+
+#define METER_LEDC_MODE    LEDC_LOW_SPEED_MODE
+#define METER_LEDC_TIMER   LEDC_TIMER_0
+#define METER_LEDC_CHANNEL LEDC_CHANNEL_0
+#define METER_FREQ_HZ      156000
+#define METER_FULL_SCALE   224   /* duty counts at Q = 100 % */
+
+static void meter_init(void)
+{
+    const ledc_timer_config_t timer_cfg = {
+        .speed_mode      = METER_LEDC_MODE,
+        .duty_resolution = LEDC_TIMER_8_BIT,
+        .timer_num       = METER_LEDC_TIMER,
+        .freq_hz         = METER_FREQ_HZ,
+        .clk_cfg         = LEDC_AUTO_CLK,
+    };
+    ledc_timer_config(&timer_cfg);
+
+    const ledc_channel_config_t ch_cfg = {
+        .gpio_num   = METER_GPIO,
+        .speed_mode = METER_LEDC_MODE,
+        .channel    = METER_LEDC_CHANNEL,
+        .timer_sel  = METER_LEDC_TIMER,
+        .duty       = 0,
+        .hpoint     = 0,
+    };
+    ledc_channel_config(&ch_cfg);
+}
+
+static void meter_set(uint32_t quality_pct)
+{
+    uint32_t duty = quality_pct * METER_FULL_SCALE / 100;
+    ledc_set_duty(METER_LEDC_MODE, METER_LEDC_CHANNEL, duty);
+    ledc_update_duty(METER_LEDC_MODE, METER_LEDC_CHANNEL);
+}
+
+/**
+ * Compute carrier strength and pulse shape quality, then print a [qual] line.
+ *
+ * Called once per second from the DCF77P_EVT_SECOND handler.
+ *
+ * carrier (0-100): phase margin normalised to the bin saturation cap (300).
+ *   Reflects carrier strength / antenna alignment. Updates every 10 ms
+ *   internally; read here at 1 s.
+ *
+ * pulse (0-100): fraction of defined ticks in the last 60 seconds.
+ *   A tick is undefined when the 220 ms classification window produced no
+ *   clean half-majority — typical of impulse noise on a healthy carrier.
+ *   The 60-second window matches one DCF frame so the metric tracks the
+ *   most recent minute rather than a slow long-term average.
+ *
+ * Both values are suitable for routing to a panel meter: carrier is the
+ * primary antenna-aiming indicator; pulse distinguishes impulse noise from
+ * weak signal when carrier alone looks marginal.
+ */
+static void quality_update_and_print(void)
+{
+    dcf77p_status_t st;
+    dcf77p_get_status(&dcfp, &st);
+
+    // carrier strength
+    uint32_t margin  = (st.quality.phase_lock > st.quality.phase_noise)
+                       ? (st.quality.phase_lock - st.quality.phase_noise) : 0;
+    uint32_t carrier = margin >= 300 ? 100 : margin * 100 / 300;
+
+    // pulse shape quality — sliding 60-second window
+    uint8_t new_undef      = (st.ticks[DCF77P_TICK_UNDEFINED] > s_prev_undef) ? 1 : 0;
+    s_prev_undef           = st.ticks[DCF77P_TICK_UNDEFINED];
+    s_win_sum             -= s_undef_win[s_win_idx];
+    s_undef_win[s_win_idx] = new_undef;
+    s_win_sum             += new_undef;
+    s_win_idx              = (s_win_idx + 1) % 60;
+    uint32_t pulse         = (60 - s_win_sum) * 100 / 60;
+    uint32_t q             = carrier * pulse / 100;
+
+    meter_set(q);
+    log_print("[qual] carrier %3lu  pulse %3lu  Q %3lu\n",
+              (unsigned long)carrier, (unsigned long)pulse, (unsigned long)q);
+}
 
 static void tick_line_reset(void)
 {
@@ -174,6 +270,7 @@ static void on_dcfp_event(const dcf77p_event_t *evt, void *ctx)
                       fmt2(t->hour, b1), fmt2(t->minute, b2), t->second,
                       fmt2(t->year2, b3), fmt2(t->month, b4), fmt2(t->day, b5));
         }
+        quality_update_and_print();
         break;
     }
 
@@ -189,6 +286,7 @@ static void on_dcfp_event(const dcf77p_event_t *evt, void *ctx)
 
 static void decoder_setup(void)
 {
+    meter_init();
     log_print("Decoder: dcf77p — phase-locked exhaustive (Udo Klein port, GPL-3.0)\n");
     log_print("1 kHz sampling, 100 phase bins, per-field maximum-likelihood binning\n");
     log_print("------------------------------------------------------------------\n");

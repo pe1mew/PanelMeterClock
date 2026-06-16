@@ -12,8 +12,8 @@
 |-------|-------|
 | Document title | Software Technical Design — PanelMeterClock Firmware |
 | Document ID | PMC-STD-001 |
-| Version | 0.2 (draft) |
-| Date | 2026-06-09 |
+| Version | 0.3 (draft) |
+| Date | 2026-06-15 |
 | Author | Remko Welling |
 | Status | Draft — under review |
 
@@ -23,6 +23,7 @@
 |---------|------|--------|----------------|
 | 0.1 | 2026-04-29 | Remko Welling | Initial draft; content migrated from PMC-FRS-001 appendices and supplemented with architecture design |
 | 0.2 | 2026-06-09 | Remko Welling | Adopted the Greenhouse-Controller OTA design (new §5.13): dual app banks + paired dual-LittleFS assets, paired atomic commit (FW_DONE + 120 s fallback), 3-fail rollback with healthy-mark, `/api/ota` state machine, OTA-in-progress flag, reboot worker, `coredump` partition. Repartitioned §3.3; added `ota_task` (§4), NVS `system/*` keys (§6), OTA constants (§7), TC-OTA-001 (§8.14), DC-009/DC-010 (§9), IC-SW-004 (§10). Ed25519 firmware signing retained. |
+| 0.3 | 2026-06-15 | Remko Welling | Raised meter PWM from 80 kHz to 156.25 kHz to clear the 77.5 kHz DCF77 band; reduced the RC filter capacitor 10 µF → 4.7 µF to match (PMC-HTD-001 §4.4, §5). Updated `PWM_FREQ_HZ` (§7), DC-004 (§9), §5.2; added a DCF77/PWM coexistence step to TC-DCF-001 (§8.7). |
 
 ### 1.3 Relationship to the FRS
 
@@ -187,7 +188,7 @@ void pwm_driver_set_duty(pwm_driver_t *drv, uint8_t duty);
 | Minutes | 16 | `LEDC_CHANNEL_1` | `LEDC_TIMER_1` | 0–60 |
 | Seconds | 17 | `LEDC_CHANNEL_2` | `LEDC_TIMER_2` | 0–60 |
 
-PWM frequency: 80 000 Hz; resolution: 8-bit; LEDC clock: 80 MHz (DC-004).  
+PWM frequency: 156 250 Hz (80 MHz ÷ 512, exact); resolution: 8-bit; LEDC clock: 80 MHz (DC-004). The frequency clears the 77.5 kHz DCF77 band — see PMC-HTD-001 §5 and §7.4.  
 Full-scale duty for 3.0 V output: 232 (= 232/255 × 3.3 V ≈ 3.0 V, FR-DSP-014, DC-003).
 
 ### 5.3 Timekeeping Engine
@@ -475,7 +476,7 @@ All magic numbers shall be defined as named constants. The following table lists
 
 | Constant | Value | Requirement |
 |----------|-------|-------------|
-| `PWM_FREQ_HZ` | 80000 | FR-DSP-008 |
+| `PWM_FREQ_HZ` | 156250 | FR-DSP-008, DC-004 |
 | `PWM_RESOLUTION_BITS` | 8 | DC-004 |
 | `PWM_FULL_SCALE_DUTY` | 232 | FR-DSP-014, DC-003 |
 | `METER_HOURS_GPIO` | 15 | IC-HW-001 |
@@ -593,6 +594,7 @@ This section defines the technical test methods and pass/fail criteria that veri
 | 3 | DCF77 only, then add NTP/GNSS | DCF77 sets UTC (correct CET/CEST offset); NTP/GNSS override it | FR-DCF-008..009 |
 | 4 | Interrupt reception; cross a CET↔CEST change | No display disturbance; UTC continuous across the change | FR-DCF-010..011 |
 | 5 | Remove the GNSS pulse with DCF77 present | Seconds tick follows the DCF77 mark; gaps fall back smoothly | FR-DCF-012 |
+| 6 | Decode DCF77 with all three meters sweeping full scale (worst-case PWM activity) | Frames still decode with no significant rise in parity errors vs. meters static — confirms the 156.25 kHz PWM does not jam 77.5 kHz reception (cross-ref HV-11) | FR-DCF-005..007, DC-004, HW-011 |
 
 ### 8.8 Network and Discovery — TC-NW-001..002
 
@@ -669,7 +671,7 @@ These constraints (moved from PMC-FRS-001) bound the implementation. Hardware sp
 | DC-001 | Target is the ESP32-S3-WROOM-1-N16R8 module (16 MB quad flash, 8 MB octal PSRAM) on the project PCB. The firmware shall be built on **Espressif ESP-IDF 5.x** (PlatformIO, `framework = espidf`) running on FreeRTOS. The Arduino framework, other application frameworks, bare-metal and alternative RTOSes are not permitted. |
 | DC-002 | The ESP32-S3 has no analogue DAC; all meter drive is produced by PWM + RC filtering via the LEDC peripheral. |
 | DC-003 | Each meter is modified so 3 V gives full-scale deflection; design point 0–3 V (duty 0–232); the 3.3 V GPIO maximum is not used as full scale (see PMC-HTD-001 §4.3). |
-| DC-004 | PWM is 8-bit (0–255) at 80 kHz from the 80 MHz LEDC clock — 256 discrete positions, no fractional duty. |
+| DC-004 | PWM is 8-bit (0–255) at **156.25 kHz** from the 80 MHz LEDC clock (exact ÷2 integer divider) — 256 discrete positions, no fractional duty. The frequency is chosen so the PWM fundamental and its harmonics stay clear of the 77.5 kHz DCF77 band (PMC-HTD-001 §5, §7.4, HW-011). |
 | DC-005 | The flash partition table must include two OTA application banks **and two paired LittleFS asset partitions, plus an `otadata` and a `coredump` partition** (§3.3, §5.13); it is a build-time configuration and cannot be changed by FOTA. |
 | DC-006 | The FOTA public key is embedded in the firmware binary at build time, excluded from OTA writes, and not modifiable at runtime. |
 | DC-007 | DCF77 reception is limited to Central Europe (≈ 2 000 km from Mainflingen) and depends on local signal strength; it is an optional, region-specific source the design shall not rely on. |
